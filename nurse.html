@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ward dashboard – HydroGuard</title>
+  <link rel="icon" href="assets/img/icon.svg" type="image/svg+xml">
+  <meta name="description" content="RN ward dashboard: residents sorted by HydroGuard risk, alerts, fluids and handover notes. Demo only.">
+  <link rel="stylesheet" href="assets/css/hydroguard.css?v=3">
+  <link rel="stylesheet" href="assets/css/nurse.css?v=3">
+</head>
+<body>
+  <main class="wrap nurse" id="main">
+    <div class="nurse-head">
+      <h1>Ward residents</h1>
+      <p class="small muted" id="who"></p>
+    </div>
+
+    <section class="block shift" id="shift" aria-label="Shift summary"></section>
+
+    <section class="alerts" id="alerts" aria-labelledby="alerts-h" hidden>
+      <h2 id="alerts-h" class="visually-hidden">Alerts</h2>
+      <ul class="alert-list" id="alert-list"></ul>
+    </section>
+
+    <div class="ward-grid">
+      <section class="ward-list" aria-labelledby="list-h">
+        <div class="toolbar">
+          <div class="list-title">
+            <h2 id="list-h" class="sub-h">Residents by risk</h2>
+            <span id="rules-btn"></span>
+          </div>
+          <label class="search">
+            <span class="visually-hidden">Search by name or room</span>
+            <input class="input" type="search" id="search" placeholder="Search name or room" autocomplete="off">
+          </label>
+          <div class="seg filters" id="filters" role="group" aria-label="Show residents by risk level"></div>
+        </div>
+        <div class="res-head" aria-hidden="true">
+          <span></span><span>Resident</span><span>Temp</span><span>HR</span><span>Hyd</span><span>Score</span><span class="col-risk">Risk</span>
+        </div>
+        <ul class="res-list" id="res-list"></ul>
+        <p class="empty small muted" id="empty" hidden></p>
+      </section>
+
+      <aside class="detail-pane" id="detail-pane" aria-label="Resident details"></aside>
+    </div>
+  </main>
+
+  <script src="assets/js/scoring.js?v=3"></script>
+  <script src="assets/js/data.js?v=3"></script>
+  <script src="assets/js/ui.js?v=3"></script>
+  <script src="assets/js/nurse.js?v=3"></script>
+</body>
+</html>

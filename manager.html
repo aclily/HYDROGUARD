@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manager dashboard – HydroGuard</title>
+  <link rel="icon" href="assets/img/icon.svg" type="image/svg+xml">
+  <meta name="description" content="Nurse Unit Manager dashboard: risk across the home, live locations, alert response, UTI watch, staffing and reports. Demo only.">
+  <link rel="stylesheet" href="assets/css/hydroguard.css?v=3">
+  <link rel="stylesheet" href="assets/css/manager.css?v=3">
+</head>
+<body>
+  <main class="wrap mgr" id="main">
+    <div class="mgr-head">
+      <h1>Kurrajong Gardens today</h1>
+      <p class="small muted" id="who">Leanne Ward, Nurse Unit Manager</p>
+    </div>
+
+    <div class="mgr-grid">
+      <!-- 1. Overview -->
+      <section class="section m-overview" id="overview" aria-labelledby="ov-h">
+        <div class="section-head"><h2 id="ov-h">Home overview</h2><span class="small muted" id="ov-time"></span></div>
+        <div class="block ov-block" id="ov-block"></div>
+        <div class="more-row ov-more" id="ov-more"></div>
+      </section>
+
+      <!-- 2. Live map -->
+      <section class="section m-map" id="map" aria-labelledby="map-h">
+        <div class="section-head">
+          <h2 id="map-h">Where residents are</h2>
+          <div class="live" id="live">
+            <span class="live-dot" aria-hidden="true"></span><strong>Live</strong>
+            <span class="small muted" id="live-ago">updated 5 sec ago</span>
+            <button type="button" class="btn ghost live-toggle" id="live-toggle" aria-pressed="false">Pause</button>
+          </div>
+        </div>
+        <div class="plan" id="plan">
+          <div class="plan-svg" id="plan-svg" aria-hidden="true"></div>
+          <div class="plan-dots" id="plan-dots"></div>
+          <div class="pop" id="pop" role="dialog" aria-labelledby="pop-name" hidden></div>
+        </div>
+        <p class="xs muted map-key">Ringed by risk:
+          <span class="chip high">High risk</span> <span class="chip watch">Watch</span> <span class="chip low">Low risk</span>
+          <span>Tap a resident for details.</span></p>
+        <details class="disclose loc-disclose">
+          <summary>List view</summary>
+          <div class="ruled loc-list" id="loc-list"></div>
+        </details>
+      </section>
+      <!-- 3. Needs attention -->
+      <section class="section m-attn" id="attention" aria-labelledby="at-h">
+        <div class="section-head"><h2 id="at-h">Needs attention</h2><span class="small muted" id="at-count"></span></div>
+        <div class="ruled attn-list" id="attn-list"></div>
+      </section>
+
+      <!-- 4. Staff on shift (full list in a pop-up) -->
+      <section class="section m-staff" id="staff" aria-labelledby="st-h">
+        <div class="section-head"><h2 id="st-h">On shift</h2><span class="small muted" id="shift-text"></span></div>
+        <button type="button" class="staff-strip" id="staff-strip"></button>
+      </section>
+
+    </div>
+
+    <!-- Printed only -->
+    <section class="print-summary" id="print-summary" aria-hidden="true"></section>
+  </main>
+
+  <script src="assets/js/scoring.js?v=3"></script>
+  <script src="assets/js/data.js?v=3"></script>
+  <script src="assets/js/ui.js?v=3"></script>
+  <script src="assets/js/manager.js?v=3"></script>
+</body>
+</html>
