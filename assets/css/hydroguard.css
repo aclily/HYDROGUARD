@@ -158,12 +158,16 @@ p { margin: 0 0 var(--s2); max-width: 68ch; }
 }
 .hg-header .wrap { display: flex; align-items: center; gap: var(--s3); min-height: 52px; }
 .hg-logo { display: flex; align-items: center; gap: var(--s2); text-decoration: none; color: var(--ink); }
-.hg-logo .mark {
-  width: 28px; height: 28px; border-radius: 8px; background: var(--navy); color: #fff;
-  display: grid; place-items: center; font: 400 20px/1 var(--serif); padding-bottom: 3px;
-}
-:root[data-theme="dark"] .hg-logo .mark { box-shadow: inset 0 0 0 1px var(--rule-strong); }
-.hg-logo .word { font: 400 20px/1 var(--serif); letter-spacing: -0.015em; }
+.hg-logo .mark { display: block; width: 48px; height: 38px; } /* mark art is 438×348 */
+.hg-logo .mark img { width: 100%; height: 100%; display: block; }
+/* Show the logo matching the site theme (ui.js always sets data-theme) */
+.hg-logo .mark .logo-dark { display: none; }
+:root[data-theme="dark"] .hg-logo .mark .logo-light { display: none; }
+:root[data-theme="dark"] .hg-logo .mark .logo-dark { display: block; }
+/* Wordmark matches the logo: geometric caps, HYDRO in aqua, GUARD in ink */
+.hg-logo .word { font: 500 19px/1 var(--sans); letter-spacing: 0.04em; }
+.hg-logo .word .hydro { color: var(--accent); }
+.hg-logo .word .guard { color: var(--ink); }
 .hg-header .context { font-size: var(--fs-sm); color: var(--ink-2); border-left: 1px solid var(--rule); padding-left: var(--s3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hg-header .spacer { flex: 1; }
 .icon-btn {
