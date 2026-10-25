@@ -3,7 +3,7 @@
   const { esc, icon } = HG;
   const $ = s => document.querySelector(s);
 
-  HG.mountHeader({ context: `${HG.FACILITY.name} demo` });
+  HG.mountHeader({ context: `${HG.FACILITY.name} demo`, wordmark: true });
 
   // On wide screens there is room beside the live reading, so show "What it does" open
   if (matchMedia('(min-width: 900px)').matches) $('.hub-more').open = true;
