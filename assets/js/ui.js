@@ -64,14 +64,18 @@
   };
 
   // ---------- Header + tabs ----------
-  // HG.mountHeader({ context: 'Banksia wing', tabs: [{ href, label, icon, current }] })
-  HG.mountHeader = function ({ context = '', tabs = [] } = {}) {
+  // HG.mountHeader({ context: 'Banksia wing', tabs: [{ href, label, icon, current }], wordmark: true })
+  // wordmark: show "HYDROGUARD" beside the mark (home page only; other pages show the mark alone)
+  HG.mountHeader = function ({ context = '', tabs = [], wordmark = false } = {}) {
     const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
     const header = HG.h(`
       <header class="hg-header">
         <div class="wrap">
           <a class="hg-logo" href="index.html" aria-label="HydroGuard demo home">
-            <span class="mark" aria-hidden="true">h</span><span class="word">hydroguard</span>
+            <span class="mark" aria-hidden="true">
+              <img class="logo-light" src="assets/img/logo/hydroguard-mark-light.svg" alt="">
+              <img class="logo-dark" src="assets/img/logo/hydroguard-mark-dark.svg" alt="">
+            </span>${wordmark ? '<span class="word" aria-hidden="true"><span class="hydro">HYDRO</span><span class="guard">GUARD</span></span>' : ''}
           </a>
           ${context ? `<span class="context">${HG.esc(context)}</span>` : ''}
           <span class="spacer"></span>
