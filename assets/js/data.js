@@ -23,12 +23,15 @@
   };
 
   // ---------- Residents ----------
+  // resus: detail is the original free text; plan/reviewed/reviewedWith/acd/mhr are structured demo fields
+  // (made up, like everything here) for the resuscitation pop-up in ui.js.
   // start = values 22 hours ago, latest = current reading. Scores are worked out in scoring.js.
   const R = [
     {
       id: 'margaret', name: 'Margaret O’Connell', preferred: 'Peggy', age: 87, dob: '14/03/1939', sex: 'F',
       residentId: 'KG-1042', band: 'HG-W-0142', room: '12', wing: 'Banksia', nurse: 'priya',
-      resus: { status: 'Not for CPR', detail: 'Advance care directive on file (signed 02/2025). Comfort care focus.' },
+      resus: { status: 'Not for CPR', detail: 'Advance care directive on file (signed 02/2025). Comfort care focus.',
+        plan: 'Comfort care focus', reviewed: '02/2025', reviewedWith: 'Daughter (Siobhan, enduring guardian)', acd: { onFile: true, signed: '02/2025' }, mhr: true },
       conditions: ['Type 2 diabetes', 'Mild dementia', 'Past UTIs (3 in 12 months)'],
       allergies: ['Trimethoprim'], mobility: 'Walks with a frame', diet: 'Diabetic, thin fluids',
       fluidTarget: 1500, likes: 'A cup of tea at 3 pm and the cricket on the radio.',
@@ -43,7 +46,8 @@
     {
       id: 'ravi', name: 'Ravi Sharma', preferred: 'Ravi', age: 88, dob: '02/11/1937', sex: 'M',
       residentId: 'KG-1057', band: 'HG-W-0157', room: '16', wing: 'Banksia', nurse: 'priya',
-      resus: { status: 'For CPR', detail: 'Full active treatment. Reviewed with family 06/2026.' },
+      resus: { status: 'For CPR', detail: 'Full active treatment. Reviewed with family 06/2026.',
+        plan: 'Full active treatment', reviewed: '06/2026', reviewedWith: 'Family', acd: { onFile: false }, mhr: false },
       conditions: ['Chronic kidney disease (stage 3)', 'Hypertension'],
       allergies: ['Penicillin'], mobility: 'Independent', diet: 'Vegetarian, low salt',
       fluidTarget: 1600, likes: 'Crosswords and a walk in the garden after lunch.',
@@ -57,7 +61,8 @@
     {
       id: 'elsie', name: 'Elsie Morgan', preferred: 'Elsie', age: 93, dob: '27/07/1933', sex: 'F',
       residentId: 'KG-1011', band: 'HG-W-0111', room: '18', wing: 'Banksia', nurse: 'priya',
-      resus: { status: 'Not for CPR', detail: 'Advance care directive on file. For hospital transfer if needed.' },
+      resus: { status: 'Not for CPR', detail: 'Advance care directive on file. For hospital transfer if needed.',
+        plan: 'For hospital transfer if needed', reviewed: '11/2025', reviewedWith: 'Son (Robert, enduring guardian)', acd: { onFile: true, signed: '11/2025' }, mhr: true },
       conditions: ['Osteoarthritis', 'Hearing loss (aids both ears)'],
       allergies: [], mobility: 'Wheelchair, two-person transfer', diet: 'Soft diet, mildly thick fluids',
       fluidTarget: 1400, likes: 'Old movies and visits from the therapy dog.',
@@ -70,7 +75,8 @@
     {
       id: 'bill', name: 'William Hartley', preferred: 'Bill', age: 79, dob: '09/01/1947', sex: 'M',
       residentId: 'KG-1078', band: 'HG-W-0178', room: '7', wing: 'Waratah', nurse: 'tom',
-      resus: { status: 'For CPR', detail: 'Full active treatment.' },
+      resus: { status: 'For CPR', detail: 'Full active treatment.',
+        plan: 'Full active treatment', reviewed: '03/2026', reviewedWith: 'Wife (Carol)', acd: { onFile: false }, mhr: false },
       conditions: ['Parkinson’s disease', 'Benign prostate enlargement'],
       allergies: ['Codeine'], mobility: 'Walks with a stick', diet: 'Normal',
       fluidTarget: 1800, likes: 'Talking footy (Swans) and the morning paper.',
@@ -84,7 +90,8 @@
     {
       id: 'wei', name: 'Wei Chen', preferred: 'Wei', age: 82, dob: '18/05/1944', sex: 'M',
       residentId: 'KG-1063', band: 'HG-W-0163', room: '14', wing: 'Banksia', nurse: 'priya',
-      resus: { status: 'For CPR', detail: 'Full active treatment.' },
+      resus: { status: 'For CPR', detail: 'Full active treatment.',
+        plan: 'Full active treatment', reviewed: '01/2026', reviewedWith: 'Daughter (Lily)', acd: { onFile: false }, mhr: false },
       conditions: ['Atrial fibrillation', 'Glaucoma'],
       allergies: [], mobility: 'Independent', diet: 'Normal',
       fluidTarget: 1700, likes: 'Tai chi class on Tuesdays and Thursdays.',
@@ -97,7 +104,8 @@
     {
       id: 'dorothy', name: 'Dorothy Papadopoulos', preferred: 'Dot', age: 91, dob: '30/09/1935', sex: 'F',
       residentId: 'KG-1003', band: 'HG-W-0103', room: '3', wing: 'Waratah', nurse: 'tom',
-      resus: { status: 'Not for CPR', detail: 'Advance care directive on file.' },
+      resus: { status: 'Not for CPR', detail: 'Advance care directive on file.',
+        plan: 'As set out in the advance care directive', reviewed: '08/2025', reviewedWith: 'Son (Nick, enduring guardian)', acd: { onFile: true, signed: '08/2025' }, mhr: true },
       conditions: ['Heart failure (stable)'],
       allergies: ['Sulfa drugs'], mobility: 'Walks with a frame', diet: 'Fluid limit 1.2 L per day',
       fluidTarget: 1200, likes: 'Baking days in the activities room.',
@@ -111,7 +119,8 @@
     {
       id: 'joan', name: 'Joan Whitfield', preferred: 'Joan', age: 84, dob: '11/12/1941', sex: 'F',
       residentId: 'KG-1029', band: 'HG-W-0129', room: '9', wing: 'Waratah', nurse: 'tom',
-      resus: { status: 'For CPR', detail: 'Full active treatment.' },
+      resus: { status: 'For CPR', detail: 'Full active treatment.',
+        plan: 'Full active treatment', reviewed: null, reviewedWith: null, acd: { onFile: false }, mhr: false },
       conditions: ['Osteoporosis'],
       allergies: [], mobility: 'Independent', diet: 'Normal',
       fluidTarget: 1600, likes: 'Gardening club and phone calls with her sister in Perth.',
@@ -124,7 +133,8 @@
     {
       id: 'kev', name: 'Kevin Doyle', preferred: 'Kev', age: 76, dob: '04/04/1950', sex: 'M',
       residentId: 'KG-1084', band: 'HG-W-0184', room: '21', wing: 'Waratah', nurse: 'tom',
-      resus: { status: 'For CPR', detail: 'Full active treatment.' },
+      resus: { status: 'For CPR', detail: 'Full active treatment.',
+        plan: 'Full active treatment', reviewed: '04/2026', reviewedWith: 'Wife (Sharon)', acd: { onFile: false }, mhr: false },
       conditions: ['Stroke (2023), left-side weakness'],
       allergies: [], mobility: 'Walks with a stick', diet: 'Normal',
       fluidTarget: 1800, likes: 'Country music and the Friday barbecue.',

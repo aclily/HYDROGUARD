@@ -7,15 +7,24 @@
 .sub-h { font: 600 var(--fs-sm)/1.3 var(--sans); color: var(--ink-2); margin: var(--s3) 0 var(--s1); letter-spacing: 0; }
 .mgr h3 { font-size: var(--fs-md); }
 
-/* Desktop grid: map wide on the right, overview + needs attention + staff on the left */
-.mgr-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+/* ---------- Views: manager.html (.mv) and manager.html#map (.lv) ---------- */
+.mv[hidden], .lv[hidden] { display: none; }
+.mgr h1:focus { outline: none; }
+.head-end { display: flex; align-items: center; gap: var(--s2); margin-left: auto; }
+.head-end .score-help { margin: -8px -8px -8px 0; }
+
+/* Manager view, desktop: overview | on shift, then Banksia | Waratah | map + alerts. Phones stack in that order. */
+.mv-top, .mv-cols { display: grid; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 1000px) {
-  .mgr-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: auto auto 1fr; column-gap: var(--s5); align-items: start; }
-  .m-overview { grid-column: 1 / span 4; grid-row: 1; }
-  .m-attn { grid-column: 1 / span 4; grid-row: 2; }
-  .m-staff { grid-column: 1 / span 4; grid-row: 3; }
-  .m-map { grid-column: 5 / span 8; grid-row: 1 / span 3; border-top: 0; }
+  .mv-top { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); column-gap: var(--s5); align-items: start; }
+  .mv-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--s5); align-items: start; }
+  .mv-top > .section, .mv-cols > .section { border-top: 1px solid var(--rule); }
 }
+.mv-side > .section:first-child { border-top: 1px solid var(--rule); }
+.mgr-head + .mv-top > .section:first-child { border-top: 0; }
+.all-res { margin-top: var(--s2); }
+.all-table td { vertical-align: top; }
+.all-table .chip { margin-right: 4px; }
 
 /* ---------- 1. Overview (compact) ---------- */
 .ov-block { padding: var(--s3) var(--s4); display: grid; gap: var(--s3); }
@@ -23,49 +32,86 @@
 .ov-num { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .ov-num .reading { font-size: var(--fs-2xl); }
 .ov-num .small { color: rgba(255,255,255,0.8); line-height: 1.5; }
-.ov-wings { display: grid; gap: 6px; }
-.wing-row { display: grid; grid-template-columns: 5.2em 1fr; gap: var(--s2); align-items: center; }
-.wing-row .small { color: rgba(255,255,255,0.85); }
-.stack-bar { display: flex; gap: 2px; height: 20px; border-radius: var(--radius-sm); overflow: hidden; }
+.ov-num .reading.ov-high { color: var(--high-mark); }
+.ov-num .reading.ov-watch { color: var(--watch-mark); }
+.ov-num .reading.ov-low { color: var(--low-mark); }
+@media (min-width: 1000px) { .ov-num .reading { font-size: var(--fs-3xl); } }
+/* Phones: the three risk counts share a row; the total sits on its own line beneath */
+@media (max-width: 479px) {
+  .ov-block { padding: var(--s3); }
+  .ov-nums { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ov-num.ov-total { grid-column: 1 / -1; flex-direction: row; align-items: baseline; gap: var(--s2); }
+  .ov-num.ov-total .reading { font-size: var(--fs-xl); }
+}
+.ov-bands { border-top: 1px solid rgba(255,255,255,0.2); }
+.ov-bands > div:first-child > dt, .ov-bands > div:first-child > dd { padding-top: var(--s2); }
+
+/* ---------- Wing columns ---------- */
+.wing-col > h2 { margin-bottom: var(--s2); }
+.wing-nurse { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s2) var(--s3); align-items: center; padding: var(--s2) 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.wing-nurse-who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.wing-btns { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--s2); }
+.wing-btns .btn { flex: 1; }
+.wing-btns .btn svg { width: 16px; height: 16px; }
+.wing-risk { margin-top: var(--s3); }
+.wing-risk p { margin: var(--s1) 0 0; }
+.wing-sub { margin: var(--s3) 0 var(--s1); }
+.stack-bar { display: flex; gap: 2px; height: 24px; border-radius: var(--radius-sm); overflow: hidden; }
 .stack-bar span { display: grid; place-items: center; font-size: var(--fs-xs); font-weight: 700; color: var(--navy); min-width: 24px; }
 .stack-bar .seg-high { background: var(--high-mark); }
 .stack-bar .seg-watch { background: var(--olive-300); }
 .stack-bar .seg-low { background: var(--low-mark); }
-.ov-bands { margin: 0; color: rgba(255,255,255,0.8); border-top: 1px solid rgba(255,255,255,0.16); padding-top: var(--s2); }
-.ov-more { margin-top: var(--s3); }
 
-/* ---------- Needs attention ---------- */
-.attn-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s2) var(--s3); align-items: center; }
+/* ---------- Needs attention / Actions ---------- */
+.attn-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s2) var(--s3); align-items: center; }
 .attn-row .avatar { --size: 36px; }
 .attn-who { display: flex; flex-direction: column; min-width: 0; }
-.attn-act .btn { padding: 0 var(--s3); white-space: nowrap; }
-@media (max-width: 420px) {
-  .attn-row { grid-template-columns: auto minmax(0, 1fr); }
-  .attn-act { grid-column: 2; }
-}
+.attn-act { grid-column: 2; }
+.attn-act .btn { padding: 0 var(--s3); }
 
-/* ---------- Staff strip (opens the full list) ---------- */
-.staff-strip {
-  display: flex; align-items: center; gap: var(--s3); width: 100%; min-height: 48px; padding: var(--s2) var(--s3);
-  border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); color: var(--ink); cursor: pointer; text-align: left;
-}
-.staff-strip:hover { border-color: var(--rule-strong); }
+/* ---------- On shift ---------- */
+.staff-strip { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 0; }
 .strip-avs { display: flex; flex: none; }
-.strip-avs .avatar { --size: 32px; box-shadow: 0 0 0 2px var(--surface); }
+.strip-avs .avatar { --size: 32px; box-shadow: 0 0 0 2px var(--bg); }
 .strip-avs .avatar + .avatar { margin-left: -8px; }
 .strip-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.strip-text .xs { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.strip-more { color: var(--accent-ink); font-weight: 600; flex: none; }
+.staff-disclose { margin-top: var(--s1); }
+.mv-tools { margin-top: var(--s3); }
+
+/* ---------- Mini map (manager view) ---------- */
+.m-mini .section-head { align-items: center; }
+.plan.is-mini .m-name { display: none; }
+.plan.is-mini .m-dot { width: 44px; height: 44px; }
+.plan.is-mini .m-dot .avatar { --size: 24px; }
+
+/* ---------- Locations view ---------- */
+.lv .m-map { padding: var(--s3) 0 var(--s4); scroll-margin-top: 64px; }
+.lv-head { align-items: center; }
+.map-stage { position: relative; }
+.lv-panel { margin-top: var(--s3); background: var(--bg); border: 1px solid var(--rule); border-radius: var(--radius); padding: var(--s2) var(--s3); }
+.panel-toggle { width: 100%; }
+.panel-body { margin-top: var(--s2); }
+.panel-body > details.disclose:first-child { border-top: 0; }
+@media (min-width: 900px) {
+  /* With the panel open the plan gets the width left of it, so no dot can ever sit under the panel */
+  .map-stage.has-panel { padding-right: calc(360px + var(--s3)); }
+  .lv-panel {
+    position: absolute; z-index: 5; top: 0; right: 0; width: 360px; max-height: 100%;
+    margin: 0; overflow-y: auto; overscroll-behavior: contain;
+  }
+  .panel-toggle { position: sticky; top: 0; z-index: 1; }
+  .lv-panel.is-collapsed { width: auto; padding: 0; border: 0; background: none; }
+  .lv-panel.is-collapsed .panel-toggle { width: auto; }
+}
+.uti-intro { margin: 0 0 var(--s2); padding-left: 1.1em; }
 
 /* ---------- Pop-ups ---------- */
-.pop-sub { margin: calc(var(--s2) * -1) 0 var(--s2); }
 #print-btn { margin-bottom: var(--s2); }
 
 /* ---------- 2. Map ---------- */
 .live { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--low-mark); box-shadow: 0 0 0 3px var(--low-bg); }
 .live.is-paused .live-dot { background: var(--ink-3); box-shadow: 0 0 0 3px var(--bg-sunk); }
-.live-toggle { min-height: 40px; }
 
 .plan { position: relative; width: 100%; margin-top: var(--s1); }
 .plan-svg, .plan-dots { position: absolute; inset: 0; }
@@ -81,7 +127,7 @@
 .pl-wing { fill: var(--ink-3); font: 500 11px var(--sans); }
 
 .m-dot {
-  position: absolute; left: 0; top: 0; width: 40px; height: 40px; padding: 0; margin: 0;
+  position: absolute; left: 0; top: 0; width: 44px; height: 44px; padding: 0; margin: 0;
   border: 0; background: none; border-radius: 50%; cursor: pointer; color: var(--ink);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   transition: left 1.4s ease-in-out, top 1.4s ease-in-out, transform 1.4s ease-in-out;
@@ -106,13 +152,12 @@
 .pop-who h3 { font-size: var(--fs-md); }
 .pop-who h3:focus { outline: none; }
 .pop-who p { margin: 2px 0 0; }
-.pop-close { flex: none; width: 40px; height: 40px; }
+.pop-close { flex: none; }
 .pop-rows { margin-top: var(--s2); }
-.pop-rows > * { padding: 5px 0; }
 .pop-links { margin-top: var(--s2); flex-wrap: wrap; }
 .pop-links .btn { flex: 1; padding: 0 var(--s2); }
 
-.map-key { margin: var(--s2) 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: none; }
+.map-key { margin: 0 0 var(--s2); max-width: none; line-height: 2; }
 .loc-disclose { margin-top: var(--s3); }
 
 .loc-row { display: grid; grid-template-columns: 9.5em 1fr; gap: var(--s2); font-size: var(--fs-sm); align-items: baseline; }
@@ -125,11 +170,16 @@
 .door-text { display: flex; flex-direction: column; min-width: 0; }
 
 /* ---------- 3. Alerts ---------- */
-.al-stats p { margin: 0 0 var(--s2); }
+.al-stats { margin-bottom: var(--s2); }
+.al-kv { margin-top: var(--s2); }
 .al-val { font-size: var(--fs-xl); }
-.al-table td { vertical-align: top; }
-.al-table td .xs.muted { margin-top: 2px; }
-.al-time { white-space: nowrap; color: var(--ink-2); }
+/* Alert row: time | who + reason | level chip, then who actioned it (or Open + Go to ward) */
+.al-row { display: grid; grid-template-columns: 4.6em minmax(0, 1fr) auto; gap: 2px var(--s2); align-items: start; }
+.al-time { color: var(--ink-2); padding-top: 1px; }
+.al-who { display: flex; flex-direction: column; min-width: 0; }
+.al-state { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); }
+.al-state .btn { padding: 0 var(--s1); }
+.al-who a { display: inline-block; padding: 11px 4px; margin: -11px -4px; }
 .al-chart { margin-top: var(--s1); }
 .bar-chart { display: block; width: 100%; height: auto; }
 .bar-chart .grid { stroke: var(--rule); }
@@ -184,7 +234,7 @@
 /* ---------- Print: daily summary only ---------- */
 .print-summary { display: none; }
 @media print {
-  .mgr-head, .mgr-grid, .demo-note, .sheet, .sheet-backdrop { display: none !important; }
+  .mgr-head, .mv, .lv, .demo-note, .sheet, .sheet-backdrop { display: none !important; }
   .print-summary { display: block; color: #000; }
   .print-summary h1 { font-size: 22pt; margin-bottom: 6pt; }
   .print-summary h2 { font-size: 14pt; margin: 14pt 0 4pt; }
@@ -193,15 +243,8 @@
   body { background: #fff; }
 }
 
-/* Resident highlighted from the ward page (manager.html?id=…#map) */
+/* Resident highlighted from the ward page (manager.html?id=<id>#map) */
 .m-dot.is-focus .avatar { outline: 2px solid var(--accent); outline-offset: 4px; }
 
-/* Alert table on phones: level chip moves under the name */
-.al-chip-inline { display: none; }
-@media (max-width: 599px) {
-  .al-table .al-level { display: none; }
-  .al-chip-inline { display: block; margin-top: 2px; }
-}
-
-/* Bigger tap areas on the small links in "Needs attention" without changing the look */
+/* Bigger tap areas on the small name links without changing the look */
 .attn-who a { display: inline-block; padding: 11px 4px; margin: -11px -4px; }

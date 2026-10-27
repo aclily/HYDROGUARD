@@ -19,7 +19,6 @@
   const latest = r.readings[r.readings.length - 1];
   const level = r.risk.level;
   const nurse = HG.staff(r.nurse);
-  const zone = HG.ZONES[r.location] || { label: 'Unknown' };
   const gp = r.contacts.find(c => c.relation === 'GP');
   const people = r.contacts.filter(c => c.relation !== 'GP');
 
@@ -33,7 +32,7 @@
   }
 
   document.title = `${r.preferred} (${r.name}) – HydroGuard`;
-  HG.mountHeader({ context: `Resident profile, room ${r.room}` });
+  HG.mountHeader({ context: 'Resident profile' });
 
   // Plain words for each reading
   function statusWord(key, v) {
@@ -43,10 +42,12 @@
     return s === 1 ? `Slightly ${dir}` : s === 2 ? dir[0].toUpperCase() + dir.slice(1) : `Very ${dir}`;
   }
 
+  // Advice for the resident and family: one line, then dot points when there is something to do
   const KIND = {
-    high: `${nurse.name.split(' ')[0]}, your nurse, has been told. Please drink a glass of water now, and tell staff if it stings when you go to the toilet or you feel hot or unwell.`,
-    watch: 'Please have a glass of water or a cup of tea. We’ll check again at the next reading.',
-    low: 'Everything looks normal. Keep sipping through the day.',
+    high: { text: `${nurse.name.split(' ')[0]}, your nurse, has been told.`,
+      points: ['Drink a glass of water now', 'Tell staff if it stings when you go to the toilet', 'Tell staff if you feel hot or unwell'] },
+    watch: { text: 'Have a glass of water or a cup of tea. We’ll check again at the next reading.' },
+    low: { text: 'Everything looks normal. Keep sipping through the day.' },
   };
 
   function when(d) {
@@ -55,41 +56,43 @@
     return sameDay(d, y) ? `Yesterday ${HG.fmtTime(d)}` : `${HG.fmtDate(d)} ${HG.fmtTime(d)}`;
   }
 
+  // "Now in the lounge, 12 min ago" or, in their own room, "Now in their room, 12 min ago"
+  const zone = HG.ZONES[r.location];
+  const place = r.location === 'room' ? 'their room' : zone ? `the ${zone.label.toLowerCase()}` : null;
+  const nowIn = place ? `Now in ${place}, ${HG.fmtAgo(r.events[0].time)}` : 'Location not known';
+
   // ---------- Sections ----------
-  // Visible: who this is, safety facts, latest readings, nurse, door key, trend graph.
-  // Behind buttons (HG.popup): care notes, key contacts, key history, more metrics.
-  const note = missing ? `<p class="res-note small" style="order:0">${reqId
-    ? `No resident matches “${esc(reqId)}”, so this shows ${esc(r.preferred)} as an example.`
-    : `No resident was given in the link, so this shows ${esc(r.preferred)} as an example.`}</p>` : '';
+  // DOM order is the reading order: identity, readings, nurse and key, trends, more (closed disclosures), actions.
+  const note = missing ? `<p class="res-note small">${reqId
+    ? `No resident “${esc(reqId)}”. Showing ${esc(r.preferred)} as an example.`
+    : `No resident in the link. Showing ${esc(r.preferred)} as an example.`}</p>` : '';
 
   const shiftTimes = HG.SHIFT.includes(', ') ? HG.SHIFT.split(', ').slice(1).join(', ') : HG.SHIFT;
 
+  const allergy = r.allergies.length
+    ? `<span class="chip high">${r.allergies.length === 1 ? 'Allergy' : 'Allergies'}: ${r.allergies.map(esc).join(', ')}</span>`
+    : '<span class="chip plain">No known allergies</span>';
+
   const identity = `
-    <section class="section res-id" style="order:1" aria-labelledby="res-name">
+    <section class="section res-id" aria-labelledby="res-name">
       <div class="block lilac res-card">
         <div class="res-card-top">
           ${HG.avatar(r, 'xl')}
           <div class="res-names">
             <h1 id="res-name">${esc(r.preferred)}</h1>
             <p class="res-full">${esc(r.name)}</p>
+            <p class="res-where">${esc(HG.where(r))}</p>
           </div>
         </div>
-        <dl class="res-meta">
-          <div><dt>Room</dt><dd>${esc(r.room)}, ${esc(r.wing)} wing</dd></div>
-          <div><dt>Born</dt><dd>${esc(r.dob)} (${r.age})</dd></div>
-          <div><dt>Resident ID</dt><dd>${esc(r.residentId)}</dd></div>
-          <div><dt>Wristband</dt><dd>${esc(r.band)}</dd></div>
-        </dl>
-        <div class="more-row res-more" id="id-more"></div>
+        <div class="res-flags">
+          <div class="res-chips">${HG.riskChip(level)}${allergy}</div>
+          ${HG.resusButton(r)}
+        </div>
       </div>
-      <dl class="res-safety">
-        <div class="safe resus"><dt>Resuscitation</dt><dd>${esc(r.resus.status)}</dd></div>
-        <div class="safe ${r.allergies.length ? 'allergy' : ''}"><dt>Allergies</dt><dd>${r.allergies.length ? r.allergies.map(esc).join(', ') : 'No known allergies'}</dd></div>
-      </dl>
     </section>`;
 
   const nurseRow = `
-    <section class="section res-nurse" style="order:3" aria-label="Nurse on shift">
+    <section class="section res-nurse" aria-label="Nurse on shift">
       ${HG.avatar(nurse)}
       <div class="nurse-text">
         <span class="small muted">Nurse on shift</span>
@@ -100,13 +103,13 @@
     </section>`;
 
   const key = `
-    <section class="section res-key" style="order:4" aria-labelledby="key-h">
-      <div class="section-head"><h2 id="key-h">My key</h2><span id="key-more"></span></div>
+    <section class="section res-key" aria-labelledby="key-h">
+      <h2 id="key-h" class="res-h">My key</h2>
       <a class="block lilac key-btn" href="door.html?room=${encodeURIComponent(r.room)}&amp;id=${encodeURIComponent(r.id)}">
         ${HG.icon.key}
-        <span><strong>Open my door</strong><span class="small">Room ${esc(r.room)}, ${esc(r.wing)} wing</span></span>
+        <span><strong>Open my door</strong><span class="small">${esc(HG.where(r))}</span></span>
       </a>
-      <p class="res-loc">${HG.icon.pin}<span>Now in <strong>${esc(zone.label)}${r.location === 'room' ? ` (room ${esc(r.room)})` : ''}</strong>, seen ${HG.fmtAgo(r.events[0].time)}</span></p>
+      <p class="res-loc">${HG.icon.pin}<span>${esc(nowIn)}</span></p>
     </section>`;
 
   const readingRows = KEYS.map(k => {
@@ -117,20 +120,25 @@
         <span class="reading">${HG.fmtValue(k, v)}<span class="unit">${rule.unit}</span></span>
       </div>`;
   }).join('');
+  const kind = KIND[level];
   const readings = `
-    <section class="section res-readings" style="order:2" aria-labelledby="read-h">
-      <div class="section-head"><h2 id="read-h">Latest readings</h2><span class="small muted">${when(latest.time)}, ${HG.fmtAgo(latest.time)}</span></div>
+    <section class="section res-readings" aria-labelledby="read-h">
+      <div class="section-head res-read-head">
+        <div><h2 id="read-h">Latest readings</h2><span class="small muted">${when(latest.time)}, ${HG.fmtAgo(latest.time)}</span></div>
+        ${HG.scoreHelp(r)}
+      </div>
       <div class="res-reading-list">${readingRows}</div>
       <div class="res-advice ${level}">
         <div class="row">${HG.riskChip(level)}<span class="small muted">Score ${r.risk.total} of 9</span></div>
-        <p class="res-kind">${esc(KIND[level])}</p>
-        <p class="small muted">For staff: ${esc(HG.LEVELS[level].advice)}</p>
+        <p class="res-kind">${esc(kind.text)}</p>
+        ${kind.points ? `<ul class="res-kind-list">${kind.points.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+        <p class="small muted">Staff: ${esc(HG.LEVELS[level].advice)}</p>
       </div>
     </section>`;
 
   const trends = `
-    <section class="section res-trends" style="order:5" aria-labelledby="trend-h">
-      <div class="section-head"><h2 id="trend-h">Trends</h2><span id="trend-more"></span></div>
+    <section class="section res-trends" aria-labelledby="trend-h">
+      <h2 id="trend-h" class="res-h">Trends</h2>
       <div class="res-controls">
         <div class="seg" role="group" aria-label="Measure" data-group="key">
           <button type="button" data-v="temp" aria-pressed="true">Temperature</button>
@@ -138,8 +146,8 @@
           <button type="button" data-v="hyd" aria-pressed="false">Hydration</button>
         </div>
         <div class="seg" role="group" aria-label="Time range" data-group="range">
-          <button type="button" data-v="24h" aria-pressed="true">Last 24 hours</button>
-          <button type="button" data-v="30d" aria-pressed="false">Last 30 days</button>
+          <button type="button" data-v="24h" aria-pressed="true">24 hours</button>
+          <button type="button" data-v="30d" aria-pressed="false">30 days</button>
         </div>
       </div>
       <div id="trend-chart" class="res-chart"></div>
@@ -148,12 +156,12 @@
     </section>`;
 
   const actions = `
-    <div class="res-actions" style="order:6">
-      <a class="btn" href="report.html?id=${encodeURIComponent(r.id)}">${HG.icon.doc}View health report</a>
-      <a class="btn secondary" href="nurse.html?id=${encodeURIComponent(r.id)}">${HG.icon.back}Back to ward <span class="xs muted">(staff only)</span></a>
+    <div class="res-actions">
+      <a class="btn" href="report.html?id=${encodeURIComponent(r.id)}">${HG.icon.doc}Health report</a>
+      <a class="btn secondary" href="nurse.html?id=${encodeURIComponent(r.id)}">${HG.icon.people}Ward view <span class="xs muted">(staff)</span></a>
     </div>`;
 
-  // ---------- Pop-up content ----------
+  // ---------- Disclosures (closed on screen, open in print) ----------
   const contactRows = people.map(c => {
     const tags = [
       c.primary ? '<span class="chip me">Primary contact</span>' : '',
@@ -170,10 +178,10 @@
     : '<li class="ct"><div class="ct-who"><strong>GP</strong> <span class="muted">Not recorded. Ask the RN in charge.</span></div></li>';
   const contactsHtml = `<ul class="ruled ct-list">${contactRows}${gpRow}</ul>`;
 
+  // Resuscitation lives in the shared pop-up (identity block), so it is not repeated here
   const careHtml = `
-    <dl class="ruled care-list">
-      <div><dt>Resuscitation</dt><dd><strong>${esc(r.resus.status)}</strong><br><span class="small">${esc(r.resus.detail)}</span></dd></div>
-      <div><dt>Conditions</dt><dd>${r.conditions.map(esc).join('<br>')}</dd></div>
+    <dl class="kv res-kv">
+      <div><dt>Conditions</dt><dd>${r.conditions.length > 1 ? `<ul>${r.conditions.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : r.conditions.map(esc).join('')}</dd></div>
       <div><dt>Mobility</dt><dd>${esc(r.mobility)}</dd></div>
       <div><dt>Diet</dt><dd>${esc(r.diet)}</dd></div>
       <div><dt>Fluid target</dt><dd>${num(r.fluidTarget)} mL a day</dd></div>
@@ -181,9 +189,15 @@
     </dl>`;
 
   const historyHtml = `
-    <p class="small muted res-pop-intro">Wristband ${esc(r.band)}, recent doors and places.</p>
     <ol class="ruled res-events">${r.events.map(e =>
       `<li><span class="ev-time">${when(e.time)}</span><span>${esc(e.text)}</span></li>`).join('')}</ol>`;
+
+  const adminHtml = `
+    <dl class="kv res-kv">
+      <div><dt>Born</dt><dd>${esc(r.dob)} (${r.age})</dd></div>
+      <div><dt>Resident ID</dt><dd>${esc(r.residentId)}</dd></div>
+      <div><dt>Wristband</dt><dd>${esc(r.band)}</dd></div>
+    </dl>`;
 
   // 7-day fluids, ending yesterday
   const dayOf = i => { const d = new Date(HG.LATEST_TIME); d.setDate(d.getDate() - (7 - i)); return d; };
@@ -207,8 +221,8 @@
           <span class="fl-val">${num(todayMl)} mL</span>
         </li>`;
     const todayText = log.length
-      ? `Today: ${log.length} ${log.length === 1 ? 'drink' : 'drinks'} logged by staff, last at ${HG.fmtTime(new Date(log[log.length - 1].time))}.`
-      : 'No drinks logged by staff yet today.';
+      ? `${log.length} ${log.length === 1 ? 'drink' : 'drinks'}, last at ${HG.fmtTime(new Date(log[log.length - 1].time))}`
+      : 'None yet';
 
     const nb = r.nightBathroom;
     const nbMax = Math.max(4, ...nb);
@@ -217,39 +231,42 @@
       const label = i === 6 ? 'Last night' : dayOf(i).toLocaleDateString(AU, { weekday: 'short' });
       return `<li><span class="nb-count">${n}</span><span class="nb-wrap"><span class="nb-bar ${t}" style="height:${Math.max(4, n / nbMax * 100)}%"></span></span><span class="nb-day">${label}</span></li>`;
     }).join('');
-    const nbText = nb[6] - nb[0] >= 2
-      ? `${nb[6]} visits last night, up from ${nb[0]} a week ago. More night-time visits can be an early sign of a UTI.`
-      : `${nb[6]} ${nb[6] === 1 ? 'visit' : 'visits'} last night, about the same as a week ago.`;
+    const nbPoints = nb[6] - nb[0] >= 2
+      ? [`${nb[6]} last night, ${nb[0]} a week ago`, 'More night visits can be an early sign of a UTI']
+      : [`${nb[6]} last night, about the same as a week ago`];
 
     return `<div class="res-mini">
         <h3 class="res-sub">Fluids, last 7 days</h3>
         <ul class="fl-list" aria-label="Fluid intake by day">${flRows}${todayRow}</ul>
-        <p class="xs muted res-legend"><span class="fl-key" aria-hidden="true"></span>Line marks the ${num(r.fluidTarget)} mL daily target. Met on ${metDays} of 7 days.</p>
-        <p class="xs muted">${todayText}</p>
+        <dl class="kv res-kv res-fl-kv">
+          <div><dt>Daily target</dt><dd><span class="fl-key" aria-hidden="true"></span>${num(r.fluidTarget)} mL</dd></div>
+          <div><dt>Met</dt><dd>${metDays} of 7 days</dd></div>
+          <div><dt>Logged today</dt><dd>${todayText}</dd></div>
+        </dl>
         <h3 class="res-sub">Night-time bathroom visits</h3>
         <ul class="nb-list" aria-label="Bathroom visits each night">${nbCols}</ul>
-        <p class="small res-nb-text">${nbText}</p>
+        <ul class="res-nb-text">${nbPoints.map(t => `<li>${t}</li>`).join('')}</ul>
       </div>`;
   }
 
-  const main = document.getElementById('main');
-  main.innerHTML = `${note}
-    <div class="res-col res-left">${identity}${nurseRow}${key}</div>
-    <div class="res-col res-right">${readings}${trends}</div>
-    ${actions}`;
+  const disclose = (id, summary, body) => `<details class="disclose" id="${id}"><summary>${summary}</summary><div>${body}</div></details>`;
+  const more = `
+    <section class="section res-more" aria-label="More about ${esc(r.preferred)}">
+      ${disclose('care', 'Care notes', careHtml)}
+      ${disclose('contacts', `Contacts (${people.length + (gp ? 1 : 0)})`, contactsHtml)}
+      ${disclose('history', 'Door and location history', historyHtml)}
+      ${disclose('metrics', 'Fluids and night visits', metricsHtml())}
+      ${disclose('admin', 'Admin details', adminHtml)}
+    </section>`;
 
-  const pop = {
-    care: HG.popup({ title: `${r.preferred}’s care notes`, body: careHtml }),
-    contacts: HG.popup({ title: 'Key contacts', body: contactsHtml }),
-    history: HG.popup({ title: 'Key history', body: historyHtml }),
-    metrics: HG.popup({ title: 'More metrics', body: metricsHtml }),
-  };
-  HG.$('#id-more').append(
-    HG.moreBtn({ label: 'Care notes', icon: 'doc', popup: pop.care }),
-    HG.moreBtn({ label: 'Key contacts', icon: 'phone', count: people.length + (gp ? 1 : 0), popup: pop.contacts }),
-  );
-  HG.$('#key-more').replaceWith(HG.moreBtn({ label: 'Key history', icon: 'key', cls: 'me', popup: pop.history }));
-  HG.$('#trend-more').replaceWith(HG.moreBtn({ label: 'More metrics', icon: 'chart', popup: pop.metrics }));
+  const main = document.getElementById('main');
+  main.innerHTML = `${note}${identity}${readings}
+    <div class="res-side">${nurseRow}${key}</div>
+    ${trends}${more}${actions}`;
+
+  // Fluids logged on the ward page may have changed: refresh each time the disclosure opens
+  const metrics = HG.$('#metrics');
+  metrics.addEventListener('toggle', () => { if (metrics.open) metrics.querySelector('div').innerHTML = metricsHtml(); });
 
   // ---------- Trend chart ----------
   const state = { key: 'temp', range: '24h' };

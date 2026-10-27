@@ -25,9 +25,16 @@
   HG.h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 
   const AU = 'en-AU';
-  HG.fmtTime = d => d.toLocaleTimeString(AU, { hour: 'numeric', minute: '2-digit' }).replace(' ', ' ');
-  HG.fmtDate = d => d.toLocaleDateString(AU, { day: 'numeric', month: 'short' });
-  HG.fmtDay = d => d.toLocaleDateString(AU, { weekday: 'short', day: 'numeric', month: 'short' });
+  // "3 pm", "3:20 pm". Browsers put U+202F before am/pm, which Hanken Grotesk has no glyph for.
+  HG.fmtTime = d => d.toLocaleTimeString(AU, { hour: 'numeric', minute: '2-digit' })
+    .replace(/[\u202f\u00a0]/g, ' ').replace(':00 ', ' ');
+  const pad2 = n => String(n).padStart(2, '0');
+  HG.fmtDMY = d => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`; // 26/10/2026
+  HG.fmtDate = d => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`;                       // 26/10 (axes, tight spots)
+  HG.fmtDay = d => `${d.toLocaleDateString(AU, { weekday: 'short' })} ${HG.fmtDate(d)}`;  // Mon 26/10
+
+  // Location: wing first, then room ("Banksia, Room 12")
+  HG.where = r => `${r.wing}, Room\u00a0${r.room}`; // no-break space keeps "Room 12" together
   HG.fmtAgo = d => {
     const m = Math.round((Date.now() - d.getTime()) / 60000);
     if (m < 1) return 'just now';
@@ -61,6 +68,7 @@
     lock: I('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
     unlock: I('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>'),
     pin: I('<path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2"/>'),
+    help: I('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7"/><path d="M12 17h.01"/>'),
   };
 
   // ---------- Header + tabs ----------
@@ -219,9 +227,128 @@
     return { update(p) { points = p; render(); } };
   };
 
+  // ---------- Score help ("?" in the corner of any section that shows scores) ----------
+  // HG.scoreHelp(r?) → button HTML. With a resident: their breakdown, then how scoring works.
+  const KEYS = ['temp', 'hr', 'hyd'];
+  const LOWER = { temp: 'temperature', hr: 'heart rate', hyd: 'hydration' };
+  const unitFor = k => HG.RULES[k].unit === '%' ? '%' : ` ${HG.RULES[k].unit}`;
+  const listNames = a => a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`;
+  HG.scoreReason = function (s) {
+    const with3 = KEYS.filter(k => s.parts[k] === 3).map(k => LOWER[k]);
+    const with2 = KEYS.filter(k => s.parts[k] === 2).map(k => LOWER[k]);
+    if (s.level === 'high') return with3.length ? `High because ${listNames(with3)} scored 3` : `High because the total is ${s.total}, which is 5 or more`;
+    if (s.level === 'watch') {
+      const bits = [];
+      if (s.total >= 2) bits.push(`the total is ${s.total} (2 to 4)`);
+      if (with2.length) bits.push(`${listNames(with2)} scored 2`);
+      return `Watch because ${bits.join(' and ')}`;
+    }
+    return `Low because the total is ${s.total} and nothing scored 2 or more`;
+  };
+  function scoreHelpHTML(r) {
+    let mine = '';
+    if (r) {
+      const l = r.readings[r.readings.length - 1], s = r.risk;
+      mine = `
+        <p class="xs muted">${HG.esc(r.preferred)}, latest reading at ${HG.fmtTime(l.time)}. Only the latest reading counts.</p>
+        <table class="table sh-table">
+          <thead><tr><th scope="col">Reading</th><th scope="col">Value</th><th scope="col" class="num">Points</th></tr></thead>
+          <tbody>${KEYS.map(k => `<tr><th scope="row">${HG.RULES[k].label}</th><td>${HG.fmtValue(k, l[k])}${unitFor(k)}</td><td class="num"><span class="sh-pts s${s.parts[k]}">${s.parts[k]}</span></td></tr>`).join('')}</tbody>
+          <tfoot><tr><th scope="row">Total</th><td></td><td class="num"><strong>${s.total}</strong> of 9</td></tr></tfoot>
+        </table>
+        <p class="sh-why">${HG.riskChip(s.level)} <span>${HG.scoreReason(s)}.</span></p>
+        <p class="xs muted">${HG.LEVELS[s.level].advice}</p>
+        <h3 class="sh-sub">How scoring works</h3>`;
+    }
+    const bands = [3, 2, 1, 0].map(n => `<tr><th scope="row"><span class="sh-pts s${n}">${n}</span></th>${KEYS.map(k => `<td>${HG.esc(HG.RULES[k].bands.find(b => b.score === n).text)}</td>`).join('')}</tr>`).join('');
+    return `<div class="score-help-body">${mine}
+      <ul class="sh-list small">
+        <li>Each reading scores 0 to 3 points</li>
+        <li>Temperature and heart rate score when too low or too high</li>
+        <li>Only the latest reading counts</li>
+      </ul>
+      <div class="table-scroll"><table class="table sh-table">
+        <thead><tr><th scope="col">Points</th>${KEYS.map(k => `<th scope="col">${HG.RULES[k].label} (${HG.RULES[k].unit})</th>`).join('')}</tr></thead>
+        <tbody>${bands}</tbody></table></div>
+      <ul class="sh-levels small">
+        <li>${HG.riskChip('high')} Total 5 or more, or any reading scores 3</li>
+        <li>${HG.riskChip('watch')} Total 2 to 4, or any reading scores 2</li>
+        <li>${HG.riskChip('low')} Total 0 or 1</li>
+      </ul>
+      <p class="sh-note small"><strong>Not clinically validated.</strong> Never replaces clinical judgement, your home’s escalation policy or a GP review.</p></div>`;
+  }
+  HG.scoreHelp = function (r) {
+    const who = r ? `${r.preferred}’s score` : 'the risk score';
+    return `<button type="button" class="icon-btn score-help" data-score-help="${r ? HG.esc(r.id) : ''}" aria-label="How ${HG.esc(who)} works">${HG.icon.help}</button>`;
+  };
+
+  // ---------- Resuscitation status button + details pop-up ----------
+  // HG.resusButton(r) → button HTML (label, status, last reviewed). HG.resusText(r) → one line for print.
+  const notRec = 'Not recorded';
+  const acdText = a => a && a.onFile ? `On file${a.signed ? `, signed ${a.signed}` : ''}` : 'None on file';
+  HG.resusButton = function (r) {
+    const x = r.resus;
+    return `<button type="button" class="resus-btn" data-resus="${HG.esc(r.id)}" aria-label="${HG.esc(x.status)}, last reviewed ${HG.esc(x.reviewed || 'not recorded')}. Show resuscitation details">
+      <span class="resus-k">Resuscitation</span><strong class="resus-status">${HG.esc(x.status)}</strong>
+      <span class="resus-rev">Last reviewed: ${HG.esc(x.reviewed || 'not recorded')}</span></button>`;
+  };
+  HG.resusText = function (r) {
+    const x = r.resus;
+    return [x.status, x.plan, `Reviewed with: ${x.reviewedWith || notRec}`, `Last reviewed: ${x.reviewed || notRec}`,
+      `Advance care directive: ${acdText(x.acd)}`, `My Health Record: ${x.mhr ? 'uploaded' : 'not uploaded'}`].filter(Boolean).join('. ') + '.';
+  };
+  function resusHTML(r) {
+    const x = r.resus;
+    return `<dl class="kv">
+        <div><dt>Status</dt><dd><strong>${HG.esc(x.status)}</strong></dd></div>
+        <div><dt>Plan</dt><dd>${HG.esc(x.plan || x.detail)}</dd></div>
+        <div><dt>Reviewed with</dt><dd>${HG.esc(x.reviewedWith || notRec)}</dd></div>
+        <div><dt>Last reviewed</dt><dd>${HG.esc(x.reviewed || notRec)}</dd></div>
+        <div><dt>Advance care directive</dt><dd>${HG.esc(acdText(x.acd))}${x.acd && x.acd.onFile ? '<br><button type="button" class="btn secondary resus-acd" data-acd>View copy</button>' : ''}</dd></div>
+        <div><dt>My Health Record</dt><dd>${x.mhr ? 'Uploaded' : 'Not uploaded'}</dd></div>
+      </dl>`;
+  }
+
+  // One pop-up each, created on first use; clicks are delegated so any page can render the buttons as HTML
+  let shPop, rsPop;
+  document.addEventListener('click', e => {
+    const sh = e.target.closest('[data-score-help]');
+    if (sh) {
+      const r = sh.dataset.scoreHelp ? HG.resident(sh.dataset.scoreHelp) : null;
+      shPop = shPop || HG.popup({ title: 'How the score works', body: '' });
+      const t = r ? `${r.preferred}’s score` : 'How the score works';
+      shPop.el.querySelector('.popup-head h2').textContent = t;
+      shPop.el.setAttribute('aria-label', t);
+      shPop.setBody(scoreHelpHTML(r));
+      shPop.open();
+      return;
+    }
+    const rb = e.target.closest('[data-resus]');
+    if (rb) {
+      const r = HG.resident(rb.dataset.resus);
+      if (!r) return;
+      rsPop = rsPop || HG.popup({ title: 'Resuscitation', body: '' });
+      const t = `Resuscitation, ${r.preferred}`;
+      rsPop.el.querySelector('.popup-head h2').textContent = t;
+      rsPop.el.setAttribute('aria-label', t);
+      rsPop.setBody(resusHTML(r));
+      rsPop.open();
+      return;
+    }
+    if (e.target.closest('[data-acd]')) HG.toast('The directive copy is not available in the demo');
+  });
+
+  // ---------- Print: disclosures always print open ----------
+  let closedForPrint = [];
+  window.addEventListener('beforeprint', () => {
+    closedForPrint = HG.$$('details.disclose:not([open])');
+    closedForPrint.forEach(d => { d.open = true; });
+  });
+  window.addEventListener('afterprint', () => { closedForPrint.forEach(d => { d.open = false; }); closedForPrint = []; });
+
   // ---------- Demo footer ----------
   HG.demoNote = function (extra = '') {
-    const n = HG.h(`<footer class="wrap"><p class="demo-note">Demo only. All residents, staff and readings are made up. The risk score has not been clinically validated and must not be used for care decisions. ${extra}</p></footer>`);
+    const n = HG.h(`<footer class="wrap"><p class="demo-note">Demo only. Residents, staff and readings are made up. The risk score is not clinically validated. Do not use it for care decisions. ${extra}</p></footer>`);
     document.body.appendChild(n);
   };
 })(window.HG = window.HG || {});

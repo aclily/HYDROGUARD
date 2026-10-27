@@ -1,15 +1,15 @@
 /* HydroGuard RN ward dashboard (nurse.html).
    Scoring always comes from HG.scoreReading / HG.scoreOne — never re-implemented here.
    Demo interactions persist in localStorage (hg-acks, hg-escalations, hg-fluids, hg-notes).
-   Layout: the list stays on the page; secondary detail (breakdown, what-if, fluids, notes,
-   alert advice, scoring rules) opens in HG.popup pop-ups. */
+   Layout: the list stays on the page; secondary detail (what-if, fluids, notes, alert advice)
+   opens in HG.popup pop-ups. Score help and resus details use the shared HG.scoreHelp / HG.resusButton.
+   Wing scope: the RN's own wing by default; ?wing=<wing> or ?id=<resident> can start on another. */
 (function (HG) {
   const $ = HG.$;
   const ME = HG.staff('priya');
   const ME_NAME = `${ME.name} ${ME.short}`;
   const KEYS = ['temp', 'hr', 'hyd'];
   const SHORT = { temp: 'Temp', hr: 'HR', hyd: 'Hyd' };
-  const LOWER = { temp: 'temperature', hr: 'heart rate', hyd: 'hydration' };
   const FLUID_PRESETS = [100, 150, 200, 250];
   const DESKTOP = matchMedia('(min-width: 1000px)');
 
@@ -36,9 +36,7 @@
   };
 
   // ---------- Helpers ----------
-  const hourLabel = d => d.getMinutes() ? HG.fmtTime(d) : HG.fmtTime(d).replace(':00', '');
-  const fullDate = d => d.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const stamp = iso => { const d = new Date(iso); return `${HG.fmtTime(d)}, ${fullDate(d)}`; };
+  const stamp = iso => { const d = new Date(iso); return `${HG.fmtTime(d)}, ${HG.fmtDMY(d)}`; };
   const isToday = iso => new Date(iso).toDateString() === new Date().toDateString();
   const latest = r => r.readings[r.readings.length - 1];
   const scoreBand = s => s === 0 ? 'low' : s === 3 ? 'high' : 'watch';
@@ -46,38 +44,32 @@
   const gp = r => r.contacts.find(c => c.relation === 'GP');
   const fmtMl = n => n.toLocaleString('en-AU');
   const unitFor = k => HG.RULES[k].unit === '%' ? '%' : ` ${HG.RULES[k].unit}`;
-  const listNames = arr => arr.length < 2 ? arr.join('') : `${arr.slice(0, -1).join(', ')} and ${arr[arr.length - 1]}`;
+  // Keeps "Room 12" together when a narrow column wraps the location
   const scoreLine = s => `${HG.LEVELS[s.level].label}: total ${s.total} of 9`;
 
-  // Plain-English reason for the level that HG.scoreReading returned.
-  function reason(s) {
-    const with3 = KEYS.filter(k => s.parts[k] === 3).map(k => LOWER[k]);
-    const with2 = KEYS.filter(k => s.parts[k] === 2).map(k => LOWER[k]);
-    if (s.level === 'high') {
-      if (with3.length) return `High because ${listNames(with3)} scored 3`;
-      return `High because the total is ${s.total}, which is 5 or more`;
-    }
-    if (s.level === 'watch') {
-      const bits = [];
-      if (s.total >= 2) bits.push(`the total is ${s.total} (2 to 4)`);
-      if (with2.length) bits.push(`${listNames(with2)} scored 2`);
-      return `Watch because ${bits.join(' and ')}`;
-    }
-    return `Low because the total is ${s.total} and nothing scored 2 or more`;
-  }
   // Very short reason for the one-line alert row: the readings that scored 2 or 3.
   function shortReason(r) {
     const l = latest(r);
     let keys = KEYS.filter(k => r.risk.parts[k] >= 2);
     if (!keys.length) keys = KEYS.filter(k => r.risk.parts[k] > 0);
-    return keys.map(k => `${SHORT[k]} ${HG.fmtValue(k, l[k])}${k === 'hyd' ? '%' : ''}`).join(', ');
+    return keys.map(k => `${SHORT[k]}\u00a0${HG.fmtValue(k, l[k])}${k === 'hyd' ? '%' : ''}`).join(', ');
   }
 
-  const sorted = () => HG.RESIDENTS.slice().sort((a, b) =>
+  // ---------- Wing scope: 'Banksia', 'Waratah' or 'all' ----------
+  const WINGS = HG.FACILITY.wings;
+  const wingFrom = v => WINGS.find(w => w.toLowerCase() === String(v || '').trim().toLowerCase());
+  let wing = wingFrom(HG.param('wing')) || ME.wing;
+  const startId = HG.param('id');
+  const startRes = startId && HG.resident(startId);
+  if (startRes && startRes.wing !== wing) wing = startRes.wing; // a tag link always lands on its resident
+  const inScope = r => wing === 'all' || r.wing === wing;
+
+  const sorted = () => HG.RESIDENTS.filter(inScope).sort((a, b) =>
     HG.LEVELS[a.risk.level].rank - HG.LEVELS[b.risk.level].rank || b.risk.total - a.risk.total || a.preferred.localeCompare(b.preferred));
   const counts = () => {
-    const c = { all: HG.RESIDENTS.length, high: 0, watch: 0, low: 0 };
-    HG.RESIDENTS.forEach(r => c[r.risk.level]++);
+    const rs = sorted();
+    const c = { all: rs.length, high: 0, watch: 0, low: 0 };
+    rs.forEach(r => c[r.risk.level]++);
     return c;
   };
   const todayLog = r => (state.fluids[r.id] || []).filter(e => isToday(e.time));
@@ -94,25 +86,29 @@
   }
   const pop = {
     alert: makePop('Alert'),
-    breakdown: makePop('Score breakdown'),
-    sim: makePop('What if?'),
+    sim: makePop('Try other values'),
     fluids: makePop('Log fluids'),
     notes: makePop('Handover notes'),
-    rules: makePop('How scoring works'),
   };
 
-  // ---------- Header text: name + hours only ----------
+  // ---------- Header: which wing, then name + hours ----------
   $('#who').textContent = `${ME_NAME}, ${HG.SHIFT.split(', ')[1] || ME.shift}`;
+  function renderWings() {
+    $('#ward-h').textContent = wing === 'all' ? 'All residents' : `${wing} residents`;
+    const opts = WINGS.map(w => [w, w]).concat([['all', 'All wings']]);
+    $('#wings').innerHTML = opts.map(([k, label]) =>
+      `<button type="button" data-wing="${HG.esc(k)}" aria-pressed="${wing === k}">${HG.esc(label)}</button>`).join('');
+  }
 
   // ---------- Shift summary: one compact line ----------
   function renderShift() {
     const c = counts();
-    const waiting = HG.RESIDENTS.filter(r => r.risk.level === 'high' && !state.acks[r.id]).length;
+    const waiting = sorted().filter(r => r.risk.level === 'high' && !state.acks[r.id]).length;
     const next = new Date(HG.LATEST_TIME.getTime() + 2 * 3600e3);
     $('#shift').innerHTML = `
       <p class="shift-big serif">${waiting ? `${waiting} to review now` : 'No one to review'}</p>
       <p class="shift-counts small"><span class="k high">${c.high} high</span><span class="k watch">${c.watch} watch</span><span class="k low">${c.low} low</span></p>
-      <p class="shift-times small">Readings ${hourLabel(HG.LATEST_TIME)}, next ${hourLabel(next)}</p>`;
+      <p class="shift-times small">Readings ${HG.fmtTime(HG.LATEST_TIME)}, next ${HG.fmtTime(next)}</p>`;
   }
 
   // ---------- Alerts: one line each ----------
@@ -123,11 +119,12 @@
       const ack = state.acks[r.id];
       return `
       <li class="alert-row${ack ? ' is-ack' : ''}">
-        <span class="alert-text">
-          <button type="button" class="link-btn" data-open="${r.id}">${HG.esc(r.preferred)}, room ${HG.esc(r.room)}</button>
+        <button type="button" class="alert-text" data-open="${r.id}">
+          <strong class="alert-name">${HG.esc(r.preferred)}</strong>
+          <span class="xs muted">${HG.esc(HG.where(r))}</span>
           <span class="xs muted">${HG.esc(shortReason(r))}</span>
-        </span>
-        <button type="button" class="more-btn alert-more" data-alert-more="${r.id}" aria-label="More about ${HG.esc(r.preferred)}’s alert">More</button>
+        </button>
+        <button type="button" class="more-btn alert-more" data-alert-more="${r.id}" aria-label="Details of ${HG.esc(r.preferred)}’s alert">Details</button>
         <button type="button" class="btn${ack ? ' secondary' : ''}" data-ack="${r.id}" ${ack ? 'disabled' : ''}>${ack ? 'Acknowledged' : 'Acknowledge'}</button>
       </li>`;
     }).join('');
@@ -141,12 +138,13 @@
     const doc = gp(r);
     return `
       <p class="why">${HG.riskChip(r.risk.level)} <span>${HG.esc(scoreLine(r.risk))}</span></p>
-      <p class="small">${reason(r.risk)}.</p>
+      <p class="small">${HG.scoreReason(r.risk)}.</p>
       <p class="small high-ink">${HG.LEVELS.high.advice}</p>
-      <ul class="ruled small status">
-        <li>${ack ? `Acknowledged by ${HG.esc(ack.by)} at ${HG.fmtTime(new Date(ack.time))}.` : 'Not acknowledged yet.'}</li>
-        <li>${esc ? `Escalated to ${HG.esc(esc.to)} at ${HG.fmtTime(new Date(esc.time))}.` : `Not escalated yet. GP is ${doc ? HG.esc(doc.name) : 'not recorded'}.`}</li>
-      </ul>
+      <dl class="kv status">
+        <div><dt>Acknowledged</dt><dd>${ack ? `${HG.esc(ack.by)}, ${HG.fmtTime(new Date(ack.time))}` : 'Not yet'}</dd></div>
+        <div><dt>Escalated</dt><dd>${esc ? `To ${HG.esc(esc.to)}, ${HG.fmtTime(new Date(esc.time))}` : 'Not yet'}</dd></div>
+        <div><dt>GP</dt><dd>${doc ? HG.esc(doc.name) : 'Not recorded'}</dd></div>
+      </dl>
       <div class="pop-actions">
         ${ack ? '' : `<button type="button" class="btn" data-ack="${r.id}">Acknowledge</button>`}
         <button type="button" class="btn secondary" data-escalate="${r.id}">Escalate to GP</button>
@@ -156,7 +154,7 @@
   function openAlert(id) {
     const r = HG.resident(id);
     alertFor = id;
-    fillPop(pop.alert, `${r.preferred}, room ${r.room}`, alertHTML(r));
+    fillPop(pop.alert, `${r.preferred}, ${HG.where(r)}`, alertHTML(r));
     pop.alert.open();
   }
   const alertOpen = () => pop.alert.el.classList.contains('open');
@@ -196,14 +194,14 @@
   function renderList() {
     const q = query.trim().toLowerCase();
     const rows = sorted().filter(r => (filter === 'all' || r.risk.level === filter) &&
-      (!q || [r.name, r.preferred, r.room, `room ${r.room}`].some(s => s.toLowerCase().includes(q))));
+      (!q || [r.name, r.preferred, r.room, r.wing, HG.where(r)].some(s => s.toLowerCase().includes(q))));
     $('#res-list').innerHTML = rows.map(r => `
       <li>
         <button type="button" class="res-row" data-open="${r.id}" ${selected === r.id && DESKTOP.matches ? 'aria-current="true"' : ''}>
           ${HG.avatar(r)}
           <span class="res-name">
             <strong>${HG.esc(r.preferred)}</strong>
-            <span class="xs muted">Room ${HG.esc(r.room)}<span class="res-wing">, ${HG.esc(r.wing)}</span></span>
+            <span class="xs muted">${HG.esc(HG.where(r))}</span>
             <span class="chip-inline" aria-hidden="true">${HG.riskChip(r.risk.level)}</span>
           </span>
           ${KEYS.map(k => valueCell(r, k)).join('')}
@@ -213,7 +211,7 @@
       </li>`).join('');
     const empty = $('#empty');
     empty.hidden = rows.length > 0;
-    if (!rows.length) empty.textContent = q ? `No residents match “${query.trim()}”.` : 'No residents at this level right now.';
+    if (!rows.length) empty.textContent = q ? `No residents match “${query.trim()}”.` : 'No residents at this level.';
   }
 
   // ---------- Detail panel (desktop pane, or bottom sheet on phones) ----------
@@ -227,28 +225,29 @@
     const l = latest(r);
     const s = r.risk;
     const zone = HG.ZONES[r.location] || { label: 'Unknown' };
-    const where = r.location === 'room' ? `${zone.label} (room ${r.room})` : zone.label;
     return `
       <div class="d-head">
         ${HG.avatar(r, 'lg')}
         <div class="d-id">
           <h2>${HG.esc(r.preferred)} <span class="faint d-full">${HG.esc(r.name)}</span></h2>
-          <p class="small muted">Room ${HG.esc(r.room)}, ${HG.esc(r.wing)} wing, age ${r.age}</p>
+          <p class="small muted">${HG.esc(HG.where(r))}</p>
+          <p class="small muted">Age ${r.age}</p>
           ${HG.riskChip(s.level)}
         </div>
         <button type="button" class="icon-btn d-close" data-close aria-label="Close details">${HG.icon.close}</button>
       </div>
 
-      <dl class="d-facts small">
-        <div><dt>Resus</dt><dd><strong>${HG.esc(r.resus.status)}</strong></dd></div>
-        <div><dt>Allergies</dt><dd class="${r.allergies.length ? 'allergy' : ''}">${r.allergies.length ? HG.esc(r.allergies.join(', ')) : 'None known'}</dd></div>
-      </dl>
-      <p class="d-resus xs muted">${HG.esc(r.resus.detail)}</p>
-      <p class="d-where small">${HG.icon.pin}<span>${HG.esc(where)}</span><a href="manager.html?id=${r.id}#map">Find on map</a></p>
+      <div class="d-facts">
+        ${HG.resusButton(r)}
+        <p class="d-allergy"><span class="xs muted">Allergies</span><strong class="${r.allergies.length ? 'allergy' : ''}">${r.allergies.length ? HG.esc(r.allergies.join(', ')) : 'None known'}</strong></p>
+      </div>
+      <p class="d-where small">${HG.icon.pin}<span>${HG.esc(zone.label)}</span><a href="manager.html?id=${r.id}#map">Find on map</a></p>
 
       <section class="d-sec" aria-labelledby="cur-h">
-        <h3 id="cur-h" class="visually-hidden">Latest readings</h3>
-        <p class="xs muted d-at">Latest reading at ${hourLabel(l.time)}</p>
+        <div class="row-between">
+          <h3 id="cur-h">Latest reading <span class="small muted">${HG.fmtTime(l.time)}</span></h3>
+          ${HG.scoreHelp(r)}
+        </div>
         <div class="d-callouts">
           ${KEYS.map(k => `
           <div class="callout">
@@ -279,31 +278,12 @@
   const noteCount = r => (state.notes[r.id] || []).length;
   let detailBtns = null; // { fluids, notes } count spans for the resident on show
 
-  function breakdownHTML(s, values) {
-    return `
-      <table class="table breakdown">
-        <thead><tr><th scope="col">Reading</th><th scope="col">Value</th><th scope="col">Points</th></tr></thead>
-        <tbody>
-          ${KEYS.map(k => `<tr><th scope="row">${HG.RULES[k].label}</th><td>${HG.fmtValue(k, values[k])}${unitFor(k)}</td><td><span class="val s${s.parts[k]}">${s.parts[k]}</span></td></tr>`).join('')}
-        </tbody>
-        <tfoot><tr><th scope="row">Total</th><td></td><td><strong>${s.total}</strong><span class="faint">/9</span></td></tr></tfoot>
-      </table>
-      <p class="why">${HG.riskChip(s.level)} <span>${reason(s)}.</span></p>
-      <p class="xs muted">${HG.LEVELS[s.level].advice}</p>`;
-  }
-
-  function openBreakdown(r) {
-    fillPop(pop.breakdown, `Score breakdown for ${r.preferred}`,
-      `<p class="xs muted">Latest reading at ${hourLabel(latest(r).time)}. Only the latest reading counts.</p>${breakdownHTML(r.risk, latest(r))}`);
-    pop.breakdown.open();
-  }
-
   // What-if simulator, starting from the resident's recorded values
   function openSim(r) {
     const l = latest(r);
-    const box = fillPop(pop.sim, `What if? ${r.preferred}`, `
+    const box = fillPop(pop.sim, `Try other values for ${r.preferred}`, `
       <div class="sim">
-        <p class="xs muted"><span class="chip plain sim-tag">Simulation</span> Try different numbers to see how the score would change. This does not change ${HG.esc(r.preferred)}’s record.</p>
+        <p class="xs muted"><span class="chip plain sim-tag">Simulation</span> Doesn’t change ${HG.esc(r.preferred)}’s record.</p>
         ${KEYS.map(k => {
           const R = HG.RULES[k];
           return `
@@ -334,7 +314,7 @@
       const changed = KEYS.some(k => sim[k] !== l[k]);
       box.querySelector('[data-sim-result]').innerHTML = `
         <p class="sim-total"><span class="reading">${s.total}<span class="unit">/9</span></span> ${HG.riskChip(s.level)}</p>
-        <p class="small">${reason(s)}.</p>
+        <p class="small">${HG.scoreReason(s)}.</p>
         <p class="xs muted">${changed ? `Recorded score is ${r.risk.total}/9, ${HG.LEVELS[r.risk.level].label.toLowerCase()}.` : 'Showing the recorded values.'}</p>`;
     };
     KEYS.forEach(k => {
@@ -376,7 +356,7 @@
       box.querySelector('[data-fluids]').innerHTML = `
         <p class="small"><strong>${fmtMl(total)} mL</strong> of ${fmtMl(r.fluidTarget)} mL target today <span class="muted">(${pct}%)</span></p>
         <div class="bar" role="img" aria-label="${pct}% of today’s fluid target"><span style="width:${pct}%"></span></div>
-        ${entries.length ? `<p class="xs muted">Logged here: ${entries.map(e => `${e.ml} mL at ${HG.fmtTime(new Date(e.time))}`).join(', ')}.</p>` : ''}`;
+        ${entries.length ? `<p class="xs muted">Logged: ${entries.map(e => `${e.ml} mL at ${HG.fmtTime(new Date(e.time))}`).join(', ')}.</p>` : ''}`;
       if (detailBtns && detailBtns.id === r.id) detailBtns.fluids.textContent = fluidCount(r);
     };
     paint();
@@ -393,7 +373,7 @@
   function openNotes(r) {
     const box = fillPop(pop.notes, `Handover notes for ${r.preferred}`, `
       <label class="visually-hidden" for="note-${r.id}">Handover note for ${HG.esc(r.preferred)}</label>
-      <textarea class="input note-box" id="note-${r.id}" rows="3" placeholder="What does the next shift need to know about ${HG.esc(r.preferred)}?"></textarea>
+      <textarea class="input note-box" id="note-${r.id}" rows="3" placeholder="Note for the next shift"></textarea>
       <div class="row"><button type="button" class="btn" data-save-note>Save note</button></div>
       <ul class="notes ruled small" data-notes></ul>`);
     const ta = box.querySelector('.note-box');
@@ -401,7 +381,7 @@
       const notes = (state.notes[r.id] || []).slice().reverse();
       box.querySelector('[data-notes]').innerHTML = notes.length
         ? notes.map(n => `<li><span class="xs muted">${stamp(n.time)}, ${HG.esc(n.by)}</span><br>${HG.esc(n.text)}</li>`).join('')
-        : '<li class="muted">No handover notes yet this shift.</li>';
+        : '<li class="muted">No notes yet.</li>';
       if (detailBtns && detailBtns.id === r.id) detailBtns.notes.textContent = noteCount(r);
     };
     paint();
@@ -429,7 +409,7 @@
       const fresh = chartHost.cloneNode(false); chartHost.replaceWith(fresh); chartHost = fresh;
       HG.chart(fresh, { points: r.readings.map(p => ({ time: p.time, value: p[key] })), key, xFormat: 'time', height: 150, scores: true });
       const R = HG.RULES[key];
-      cap.textContent = `${R.label} every 2 hours. Shaded band is normal (${HG.fmtValue(key, R.normal[0])} to ${HG.fmtValue(key, R.normal[1])}${unitFor(key)}). Dot colour shows points.`;
+      cap.textContent = `Every 2 hours. Normal: ${HG.fmtValue(key, R.normal[0])}–${HG.fmtValue(key, R.normal[1])}${unitFor(key)} (shaded). Dot colour shows points.`;
     };
     // Draw after layout so the chart reads the panel width.
     requestAnimationFrame(() => redraw('temp'));
@@ -441,8 +421,7 @@
     // Secondary detail behind small buttons
     const row = container.querySelector('[data-more]');
     const btn = (label, icon, count, fn) => { const b = HG.moreBtn({ label, icon, count }); b.addEventListener('click', () => fn(r)); row.appendChild(b); return b; };
-    btn('Score breakdown', 'chart', null, openBreakdown);
-    btn('What if?', 'thermo', null, openSim);
+    btn('Try other values', 'thermo', null, openSim);
     const fl = btn('Log fluids', 'drop', fluidCount(r), openFluids);
     const nt = btn('Handover notes', 'doc', noteCount(r), openNotes);
     detailBtns = { id: r.id, fluids: fl.querySelector('.count'), notes: nt.querySelector('.count') };
@@ -469,32 +448,11 @@
     }
   }
 
-  // ---------- Scoring rules (pop-up) ----------
-  function rulesHTML() {
-    const rows = [3, 2, 1, 0].map(score => `
-      <tr><th scope="row"><span class="val s${score}">${score}</span></th>
-      ${KEYS.map(k => `<td>${HG.esc(HG.RULES[k].bands.find(b => b.score === score).text)}</td>`).join('')}</tr>`).join('');
-    return `
-      <p class="small muted">Each reading scores 0 to 3 points. Temperature and heart rate score points when they are too low or too high. Only the latest reading counts towards the score.</p>
-      <div class="table-scroll">
-        <table class="table rules-t">
-          <thead><tr><th scope="col">Points</th>${KEYS.map(k => `<th scope="col">${HG.RULES[k].label} (${HG.RULES[k].unit})</th>`).join('')}</tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-      <ul class="level-rules small">
-        <li>${HG.riskChip('high')} Total of 5 or more, or any one reading scores 3.</li>
-        <li>${HG.riskChip('watch')} Total of 2 to 4, or any one reading scores 2.</li>
-        <li>${HG.riskChip('low')} Total of 0 or 1.</li>
-      </ul>
-      <p class="disclaimer small"><strong>Not clinically validated.</strong> This score is a demo. It must not replace clinical judgement, your home’s escalation policy or a GP review.</p>`;
-  }
-  fillPop(pop.rules, 'How scoring works', rulesHTML());
-  $('#rules-btn').replaceWith(HG.moreBtn({ label: 'How scoring works', icon: 'check', cls: 'rules-btn', popup: pop.rules }));
+  $('#score-help').outerHTML = HG.scoreHelp();
 
   // ---------- Events ----------
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-open],[data-ack],[data-escalate],[data-filter],[data-alert-more]');
+    const t = e.target.closest('[data-open],[data-ack],[data-escalate],[data-filter],[data-wing],[data-alert-more]');
     if (!t) return;
     if (t.dataset.open) {
       if (pop.alert.el.contains(t)) pop.alert.close();
@@ -503,16 +461,31 @@
     else if (t.dataset.ack) acknowledge(t.dataset.ack);
     else if (t.dataset.escalate) escalate(t.dataset.escalate);
     else if (t.dataset.filter) { filter = t.dataset.filter; renderFilters(); renderList(); }
+    else if (t.dataset.wing) setWing(t.dataset.wing);
   });
   $('#search').addEventListener('input', e => { query = e.target.value; renderList(); });
 
   DESKTOP.addEventListener('change', () => {
-    if (DESKTOP.matches) { sheet.close(); sheetBody.innerHTML = ''; openResident(selected || sorted()[0].id); }
+    if (DESKTOP.matches) { sheet.close(); sheetBody.innerHTML = ''; openFirst(); }
     else { pane.innerHTML = ''; renderList(); }
   });
 
+  // Desktop keeps a resident on show: the selected one if still in scope, else the first.
+  function openFirst() {
+    const rs = sorted();
+    if (selected && rs.some(r => r.id === selected)) openResident(selected);
+    else if (rs.length) openResident(rs[0].id);
+    else { selected = null; pane.innerHTML = ''; }
+  }
+  function setWing(w) {
+    if (w === wing) return;
+    wing = w;
+    refresh();
+    if (DESKTOP.matches) openFirst();
+  }
+
   function refresh() {
-    renderShift(); renderAlerts(); renderFilters(); renderList();
+    renderWings(); renderShift(); renderAlerts(); renderFilters(); renderList();
     // keep an open alert pop-up in step with what just changed
     if (alertFor && alertOpen()) {
       const box = pop.alert.body.querySelector('.pop');
@@ -523,7 +496,6 @@
   refresh();
   HG.demoNote();
 
-  const start = HG.param('id');
-  if (start && HG.resident(start)) openResident(start);
-  else if (DESKTOP.matches) openResident(sorted()[0].id);
+  if (startRes) openResident(startRes.id);
+  else if (DESKTOP.matches) openFirst();
 })(window.HG = window.HG || {});

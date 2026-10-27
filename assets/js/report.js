@@ -3,7 +3,6 @@
   const AU = 'en-AU';
   const esc = HG.esc;
   const num = n => Number(n).toLocaleString(AU);
-  const dmy = d => d.toLocaleDateString(AU, { day: '2-digit', month: '2-digit', year: 'numeric' });
   const KEYS = ['temp', 'hr', 'hyd'];
   const withUnit = (key, v) => key === 'hyd' ? `${HG.fmtValue(key, v)}%` : `${HG.fmtValue(key, v)} ${HG.RULES[key].unit}`;
 
@@ -22,7 +21,7 @@
 
   // Ward-page records (written by nurse.js); fail quietly without storage
   const store = key => { try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) { return {}; } };
-  const stamp = iso => { const d = new Date(iso); return `${HG.fmtTime(d)}, ${dmy(d)}`; };
+  const stamp = iso => { const d = new Date(iso); return `${HG.fmtTime(d)}, ${HG.fmtDMY(d)}`; };
   const todayFluids = (Array.isArray(store('hg-fluids')[r.id]) ? store('hg-fluids')[r.id] : [])
     .filter(e => new Date(e.time).toDateString() === now.toDateString() && Number(e.ml) > 0);
   const todayMl = todayFluids.reduce((t, e) => t + Number(e.ml), 0);
@@ -55,7 +54,6 @@
     const uti = r.conditions.some(c => /UTI/.test(c));
     if (risk.level === 'high' && uti) s.push(`With ${P.pos} history of UTIs, review now for signs of UTI and let the RN in charge know.`);
     else s.push(HG.LEVELS[risk.level].advice);
-    if (r.allergies.length && risk.level !== 'low') s.push(`Allergic to ${r.allergies.join(', ').toLowerCase()}: check before any new medicine is charted.`);
     return s.join(' ');
   }
 
@@ -87,9 +85,9 @@
   main.innerHTML = `
     <div class="rp-toolbar no-print">
       <button class="btn" type="button" id="print">${HG.icon.print}Print or save as PDF</button>
-      <a class="btn secondary" href="resident.html?id=${encodeURIComponent(r.id)}">${HG.icon.back}Back to ${esc(r.preferred)}’s profile</a>
+      <a class="btn secondary" href="resident.html?id=${encodeURIComponent(r.id)}">${HG.icon.back}${esc(r.preferred)}’s profile</a>
     </div>
-    ${missing ? `<p class="rp-note small no-print">${reqId ? `No resident matches “${esc(reqId)}”` : 'No resident was given in the link'}, so this shows ${esc(r.preferred)} as an example.</p>` : ''}
+    ${missing ? `<p class="rp-note small no-print">${reqId ? `No resident “${esc(reqId)}”.` : 'No resident in the link.'} Showing ${esc(r.preferred)} as an example.</p>` : ''}
 
     <article class="rp-page" aria-labelledby="rp-title">
       <header class="rp-head">
@@ -97,22 +95,32 @@
           <h1 id="rp-title">Resident health report</h1>
           <p class="small muted">${esc(HG.FACILITY.full)}</p>
         </div>
-        <p class="small rp-prep">Prepared for ${esc(preparedBy.name)} ${esc(preparedBy.short)}<br>${dmy(now)}, ${HG.fmtTime(now)}</p>
+        <p class="small rp-prep">Prepared for ${esc(preparedBy.name)} ${esc(preparedBy.short)}<br>${HG.fmtDMY(now)}, ${HG.fmtTime(now)}</p>
       </header>
 
       <section class="rp-id">
         ${HG.avatar(r, 'lg')}
         <div class="rp-who">
           <h2>${esc(r.name)} <span class="rp-pref">(${esc(r.preferred)})</span></h2>
-          <dl class="rp-meta">
-            <div><dt>Born</dt><dd>${esc(r.dob)} (${r.age})</dd></div>
-            <div><dt>Room</dt><dd>${esc(r.room)}, ${esc(r.wing)} wing</dd></div>
-            <div><dt>Resident ID</dt><dd>${esc(r.residentId)}</dd></div>
-            <div><dt>Wristband</dt><dd>${esc(r.band)}</dd></div>
-          </dl>
+          <div class="rp-facts">
+            <dl class="kv rp-meta">
+              <div><dt>Born</dt><dd>${esc(r.dob)} (${r.age})</dd></div>
+              <div><dt>Location</dt><dd>${esc(HG.where(r))}</dd></div>
+              <div><dt>Resident ID</dt><dd>${esc(r.residentId)}</dd></div>
+              <div><dt>Wristband</dt><dd>${esc(r.band)}</dd></div>
+            </dl>
+            <dl class="kv rp-meta">
+              <div><dt>Conditions</dt><dd><ul class="rp-conds">${r.conditions.map(c => `<li>${esc(c)}</li>`).join('')}</ul></dd></div>
+              <div><dt>Mobility</dt><dd>${esc(r.mobility)}</dd></div>
+              <div><dt>Diet</dt><dd>${esc(r.diet)}</dd></div>
+            </dl>
+          </div>
         </div>
         <div class="rp-flags">
-          <div class="rp-flag"><span class="k">Resuscitation</span><strong>${esc(r.resus.status)}</strong><span class="d">${esc(r.resus.detail)}</span></div>
+          <div class="rp-resus">
+            ${HG.resusButton(r)}
+            <p class="rp-print-only">${esc(HG.resusText(r))}</p>
+          </div>
           <div class="rp-flag${r.allergies.length ? ' allergy' : ''}"><span class="k">Allergies</span><strong>${r.allergies.length ? r.allergies.map(esc).join(', ') : 'No known allergies'}</strong></div>
         </div>
       </section>
@@ -122,19 +130,26 @@
         <p>${esc(writeSummary())}</p>
         ${ack && ack.time ? `<p class="small rp-ward"><strong>Alert acknowledged</strong> by ${esc(ack.by || 'staff')}, ${esc(stamp(ack.time))}.</p>` : ''}
         ${lastNote && lastNote.text ? `<p class="small rp-ward"><strong>Latest handover note</strong> (${esc(lastNote.by || 'staff')}, ${esc(stamp(lastNote.time))}): ${esc(lastNote.text)}</p>` : ''}
-        <p class="small muted">Conditions: ${r.conditions.map(esc).join('; ')}. Mobility: ${esc(r.mobility)}. Diet: ${esc(r.diet)}.</p>
       </section>
 
       <div class="rp-cols">
         <section>
-          <h2>Latest reading, ${HG.fmtTime(latest.time)} ${dmy(latest.time)}</h2>
+          <h2>Latest reading, ${HG.fmtTime(latest.time)} ${HG.fmtDMY(latest.time)}</h2>
           <table class="table rp-table">
             <thead><tr><th scope="col">Measure</th><th scope="col" class="num">Reading</th><th scope="col">Normal range</th><th scope="col" class="num">Points</th></tr></thead>
             <tbody>${scoreRows}</tbody>
             <tfoot><tr><th scope="row" colspan="3">Total (out of 9)</th><td class="num rp-total">${risk.total}</td></tr></tfoot>
           </table>
           <p class="rp-level">${HG.riskChip(risk.level)} <span class="small">${esc(HG.LEVELS[risk.level].advice)}</span></p>
-          <p class="xs muted">Each measure scores 0 to 3. High risk: total 5 or more, or any measure scoring 3. Watch: total 2 to 4, or any measure scoring 2.</p>
+          <details class="disclose rp-key">
+            <summary>How the score works</summary>
+            <ul class="xs muted rp-points">
+              <li>Each measure scores 0 to 3</li>
+              <li><strong>High:</strong> total 5 or more, or any measure scoring 3</li>
+              <li><strong>Watch:</strong> total 2 to 4, or any measure scoring 2</li>
+              <li><strong>Low:</strong> total 0 or 1</li>
+            </ul>
+          </details>
         </section>
         <section>
           <h2>Last 7 days</h2>
@@ -143,8 +158,11 @@
             <tbody>${weekRows}</tbody>
             <tfoot><tr><th scope="row">Today so far</th><td class="num">${num(todayMl)}</td><td class="num">${Math.round(todayMl / r.fluidTarget * 100)}%</td><td class="num muted">–</td></tr></tfoot>
           </table>
-          <p class="xs muted">${todayFluids.length ? `Today: ${todayFluids.length} ${todayFluids.length === 1 ? 'drink' : 'drinks'} logged by staff, last at ${HG.fmtTime(new Date(todayFluids[todayFluids.length - 1].time))}.` : 'No drinks logged by staff yet today.'}</p>
-          <p class="xs muted">Fluid target ${num(r.fluidTarget)} mL a day. Night visits are overnight bathroom trips; a rise can be an early sign of a UTI.</p>
+          <ul class="xs muted rp-points">
+            <li>${todayFluids.length ? `Today: ${todayFluids.length} ${todayFluids.length === 1 ? 'drink' : 'drinks'} logged by staff, last at ${HG.fmtTime(new Date(todayFluids[todayFluids.length - 1].time))}` : 'No drinks logged by staff yet today'}</li>
+            <li>Target: ${num(r.fluidTarget)} mL a day</li>
+            <li>Night visits: overnight bathroom trips. A rise can be an early sign of a UTI.</li>
+          </ul>
         </section>
       </div>
 

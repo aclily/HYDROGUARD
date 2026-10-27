@@ -41,12 +41,13 @@
       <div class="live-band">
         <span class="live-id">${icon.nfc}<span>Band ${esc(top.band)}</span></span>
         <span class="live-time">Read at ${HG.fmtTime(latest.time)}</span>
+        ${HG.scoreHelp(top)}
       </div>
       <div class="live-who">
         ${HG.avatar(top, 'lg')}
         <div>
           <h2 class="live-name">${esc(shortName(top))}</h2>
-          <p class="live-meta">Room ${esc(top.room)}, ${esc(top.wing)} wing. Now in the ${esc(HG.ZONES[top.location].label.toLowerCase())}.</p>
+          <p class="live-meta">${esc(HG.where(top))}<br>Now in the ${esc(HG.ZONES[top.location].label.toLowerCase())}</p>
           <span class="chip ${top.risk.level}">${HG.LEVELS[top.risk.level].label}, score ${top.risk.total} of 9</span>
         </div>
       </div>
@@ -54,38 +55,43 @@
       <p class="live-advice">${esc(HG.LEVELS[top.risk.level].advice)}</p>
       <div class="live-actions">
         <a class="btn" href="resident.html?id=${top.id}">Open ${esc(possessive(top.preferred))} profile</a>
-        <a class="btn secondary" href="nurse.html?id=${top.id}">See it on the ward</a>
+        <a class="btn secondary" href="nurse.html?id=${top.id}">Open on ward</a>
       </div>
     </article>`;
 
-  // ---------- Residents ----------
+  // ---------- Link rows: a label, then a wrap of link pills ----------
+  const pill = (href, ic, label, cls = '', aria = '') =>
+    `<a class="more-btn ${cls}" href="${href}"${aria ? ` aria-label="${esc(aria)}"` : ''}>${ic ? icon[ic] : ''}<span>${esc(label)}</span></a>`;
+  const linkRows = groups => groups.map(g => `
+    <li><span class="view-label small muted">${esc(g.label)}</span><span class="more-row">${g.links.join('')}</span></li>`).join('');
+
+  // ---------- Staff views ----------
+  $('#staff-list').innerHTML = linkRows([
+    { label: 'Dashboards', links: [
+      pill('nurse.html', 'people', 'Ward dashboard'),
+      pill('manager.html', 'chart', 'Manager dashboard'),
+      pill('manager.html#map', 'map', 'Floor plan'),
+    ] },
+    { label: 'Health reports', links: residents.map(r => pill(`report.html?id=${r.id}`, 'doc', r.preferred, '', `${possessive(r.preferred)} health report`)) },
+  ]);
+
+  // ---------- Resident views: what each wristband tag opens, then doors ----------
   $('#res-grid').innerHTML = residents.map(r => `
     <li>
       <a class="res-link" href="resident.html?id=${r.id}">
         ${HG.avatar(r)}
         <span class="res-text">
           <span class="res-name">${esc(r.preferred)}</span>
-          <span class="res-sub">${esc(r.name)}, room ${esc(r.room)}</span>
+          <span class="res-sub">${esc(r.name)}<br>${esc(HG.where(r))}</span>
           ${HG.riskChip(r.risk.level)}
         </span>
       </a>
     </li>`).join('');
 
-  // ---------- Other views: one compact row of links per group ----------
-  const pill = (href, ic, label, cls = '', aria = '') =>
-    `<a class="more-btn ${cls}" href="${href}"${aria ? ` aria-label="${esc(aria)}"` : ''}>${ic ? icon[ic] : ''}<span>${esc(label)}</span></a>`;
   const doorPeople = ['margaret', 'ravi', 'bill', 'kev'].map(HG.resident).filter(Boolean);
-  const groups = [
-    { label: 'Staff', links: [
-      pill('nurse.html', 'people', 'Ward', '', 'Ward dashboard'),
-      pill('manager.html', 'chart', 'Manager', '', 'Manager dashboard'),
-      pill('manager.html#map', 'map', 'Floor plan'),
-    ] },
-    { label: 'Doors', links: doorPeople.map(r => pill(`door.html?room=${encodeURIComponent(r.room)}`, '', `Room ${r.room}`, 'me', `Room ${r.room} door`)) },
-    { label: 'Reports', links: residents.slice(0, 3).map(r => pill(`report.html?id=${r.id}`, 'doc', r.preferred, '', `${possessive(r.preferred)} health report`)) },
-  ];
-  $('#other-list').innerHTML = groups.map(g => `
-    <li><span class="other-label small muted">${esc(g.label)}</span><span class="more-row">${g.links.join('')}</span></li>`).join('');
+  $('#door-list').innerHTML = linkRows([
+    { label: 'Doors', links: doorPeople.map(r => pill(`door.html?room=${encodeURIComponent(r.room)}`, '', HG.where(r), 'me', `${HG.where(r)} door`)) },
+  ]);
 
   HG.demoNote();
 })();

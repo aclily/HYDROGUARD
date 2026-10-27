@@ -16,8 +16,8 @@
   // A wristband that belongs to someone else, for the refused demo
   const other = HG.RESIDENTS[(HG.RESIDENTS.indexOf(r) + 1) % HG.RESIDENTS.length];
 
-  document.title = `Room ${room} door – HydroGuard`;
-  HG.mountHeader({ context: `Door reader, room ${room}` });
+  document.title = `${HG.where(r)} door – HydroGuard`;
+  HG.mountHeader({ context: 'Door reader' });
 
   // ---------- Access log ----------
   const LOG_KEY = `hg-door-${room}`;
@@ -42,21 +42,20 @@
 
   // ---------- Markup ----------
   const note = missing ? `<p class="door-note small">${qRoom
-    ? `No room ${esc(qRoom)} is set up in this demo, so this shows room ${esc(room)}.`
-    : `No room was given in the link, so this shows room ${esc(room)}.`}</p>` : '';
+    ? `No room ${esc(qRoom)} in this demo. Showing ${esc(HG.where(r))}.`
+    : `No room in the link. Showing ${esc(HG.where(r))}.`}</p>` : '';
 
   document.getElementById('main').innerHTML = `
     ${note}
     <section class="block door-reader" data-state="reading" aria-labelledby="door-room">
       <div class="door-top">
         <div>
-          <p class="door-room-label">Room</p>
-          <p class="door-room serif" id="door-room">${esc(room)}</p>
-          <p class="door-wing">${esc(r.wing)} wing</p>
+          <p class="door-wing">${esc(r.wing)}</p>
+          <p class="door-room serif" id="door-room">Room ${esc(room)}</p>
         </div>
         <span class="door-icon" aria-hidden="true">${HG.icon.nfc}</span>
       </div>
-      <p class="door-status" id="door-status" role="status" aria-live="polite">Reading wristband…</p>
+      <p class="door-status" id="door-status" role="status" aria-live="polite">Reading wristband</p>
       <p class="door-sub" id="door-sub">Hold the wristband still on the reader</p>
     </section>
 
@@ -65,19 +64,19 @@
       <div>
         <p class="door-name">${esc(r.preferred)} <span class="muted">(${esc(r.name)})</span></p>
         <p class="small muted">Wristband ${esc(r.band)}</p>
-        <a class="small" href="resident.html?id=${encodeURIComponent(r.id)}">View ${esc(r.preferred)}’s profile</a>
+        <a class="small" href="resident.html?id=${encodeURIComponent(r.id)}">${esc(r.preferred)}’s profile</a>
       </div>
     </div>
 
     <div class="door-actions">
       <button class="btn" type="button" id="again">${HG.icon.unlock}Unlock again</button>
-      <button class="btn secondary" type="button" id="wrong">${HG.icon.nfc}Try with a different wristband</button>
+      <button class="btn secondary" type="button" id="wrong">${HG.icon.nfc}Try another wristband</button>
     </div>
     <div class="more-row door-more" id="door-more"></div>`;
 
   // Access log lives in a pop-up, with the Clear log action inside
   const logPop = HG.popup({
-    title: `Access log, room ${room}`,
+    title: `Access log, ${HG.where(r)}`,
     body: `<ol class="ruled door-log" id="door-log"></ol>
       <div class="door-log-foot"><button class="btn ghost" type="button" id="clear">Clear log</button></div>`,
   });
@@ -100,7 +99,7 @@
       const t = e.t.toDateString() === today ? HG.fmtTime(e.t) : `${HG.fmtDate(e.t)} ${HG.fmtTime(e.t)}`;
       const what = e.ok
         ? `<span class="chip low">Unlocked</span><span>${esc(r.preferred)}’s wristband (${esc(e.band)})</span>`
-        : `<span class="chip high">Refused</span><span>Wristband ${esc(e.band)} is not set up for room ${esc(room)}</span>`;
+        : `<span class="chip high">Refused</span><span>Wristband ${esc(e.band)} is not set up for this door</span>`;
       return `<li><span class="log-time">${t}</span><span class="log-what">${what}</span></li>`;
     }).join('');
   }
@@ -125,7 +124,7 @@
     clearTimers();
     busy(true);
     setState('reading');
-    status.textContent = 'Reading wristband…';
+    status.textContent = 'Reading wristband';
     sub.textContent = 'Hold the wristband still on the reader';
     later(() => {
       busy(false);
@@ -157,8 +156,8 @@
 
   function refuse() {
     setState('refused');
-    status.textContent = `This wristband can’t open room ${room}`;
-    sub.textContent = `Wristband ${other.band} is not set up here. Attempt logged.`;
+    status.textContent = 'Wrong wristband';
+    sub.textContent = `${other.band} is not set up for this door. Attempt logged.`;
     addLog(false, other.band);
     later(lock, 5000);
   }

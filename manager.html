@@ -6,68 +6,135 @@
   <title>Manager dashboard – HydroGuard</title>
   <link rel="icon" href="assets/img/logo/hydroguard-mark.svg" type="image/svg+xml">
   <meta name="description" content="Nurse Unit Manager dashboard: risk across the home, live locations, alert response, UTI watch, staffing and reports. Demo only.">
-  <link rel="stylesheet" href="assets/css/hydroguard.css?v=3">
-  <link rel="stylesheet" href="assets/css/manager.css?v=3">
+  <link rel="stylesheet" href="assets/css/hydroguard.css?v=4">
+  <link rel="stylesheet" href="assets/css/manager.css?v=4">
 </head>
 <body>
   <main class="wrap mgr" id="main">
-    <div class="mgr-head">
-      <h1>Kurrajong Gardens today</h1>
-      <p class="small muted" id="who">Leanne Ward, Nurse Unit Manager</p>
+    <!-- Two views on one page: manager.html (manager view) and manager.html#map (locations view).
+         manager.js switches them on hashchange and moves the one floor plan (#plan) between the two slots. -->
+
+    <!-- ================= Manager view ================= -->
+    <div class="mv" id="mv">
+      <div class="mgr-head">
+        <h1 id="mv-h" tabindex="-1">Kurrajong Gardens today</h1>
+        <p class="small muted" id="who"></p>
+      </div>
+
+      <div class="mv-top">
+        <section class="section m-overview" aria-labelledby="ov-h">
+          <div class="section-head">
+            <h2 id="ov-h">Home overview</h2>
+            <span class="head-end"><span class="small muted" id="ov-time"></span><span id="ov-help"></span></span>
+          </div>
+          <div class="block ov-block" id="ov-block"></div>
+        </section>
+
+        <section class="section m-staff" aria-labelledby="st-h">
+          <div class="section-head"><h2 id="st-h">On shift</h2><span class="small muted" id="shift-text"></span></div>
+          <div class="staff-strip" id="staff-strip"></div>
+          <details class="disclose staff-disclose">
+            <summary id="staff-sum">On shift</summary>
+            <div class="ruled staff-list" id="staff-list"></div>
+          </details>
+          <div class="more-row mv-tools" id="mv-tools"></div>
+        </section>
+      </div>
+
+      <div class="mv-cols">
+        <section class="section wing-col" data-wing="Banksia" aria-labelledby="wing-h-banksia"></section>
+        <section class="section wing-col" data-wing="Waratah" aria-labelledby="wing-h-waratah"></section>
+        <div class="mv-side">
+          <section class="section m-mini" aria-labelledby="mini-h">
+            <div class="section-head"><h2 id="mini-h">Map</h2><a class="btn secondary" href="manager.html#map">Open locations</a></div>
+            <div class="mini-slot" id="mini-slot"></div>
+          </section>
+          <section class="section m-alerts" aria-labelledby="mal-h">
+            <div class="section-head"><h2 id="mal-h">Alerts</h2><span class="small muted">Last 12 hours</span></div>
+            <div class="ruled al-list" data-alerts></div>
+          </section>
+        </div>
+      </div>
+
+      <details class="disclose all-res">
+        <summary id="all-sum">All residents</summary>
+        <div class="table-scroll"><table class="table all-table" id="all-table"></table></div>
+      </details>
     </div>
 
-    <div class="mgr-grid">
-      <!-- 1. Overview -->
-      <section class="section m-overview" id="overview" aria-labelledby="ov-h">
-        <div class="section-head"><h2 id="ov-h">Home overview</h2><span class="small muted" id="ov-time"></span></div>
-        <div class="block ov-block" id="ov-block"></div>
-        <div class="more-row ov-more" id="ov-more"></div>
-      </section>
-
-      <!-- 2. Live map -->
-      <section class="section m-map" id="map" aria-labelledby="map-h">
-        <div class="section-head">
-          <h2 id="map-h">Where residents are</h2>
+    <!-- ================= Locations view ================= -->
+    <div class="lv" id="lv" hidden>
+      <section class="m-map" id="map" aria-labelledby="map-h">
+        <div class="section-head lv-head">
+          <h1 id="map-h" tabindex="-1">Where residents are</h1>
           <div class="live" id="live">
             <span class="live-dot" aria-hidden="true"></span><strong>Live</strong>
             <span class="small muted" id="live-ago">updated 5 sec ago</span>
             <button type="button" class="btn ghost live-toggle" id="live-toggle" aria-pressed="false">Pause</button>
           </div>
         </div>
-        <div class="plan" id="plan">
-          <div class="plan-svg" id="plan-svg" aria-hidden="true"></div>
-          <div class="plan-dots" id="plan-dots"></div>
-          <div class="pop" id="pop" role="dialog" aria-labelledby="pop-name" hidden></div>
+        <p class="xs muted map-key">Tap a resident for details. Ring colour:
+          <span class="chip high">High risk</span> <span class="chip watch">Watch</span> <span class="chip low">Low risk</span></p>
+
+        <div class="map-stage" id="map-slot">
+          <!-- The floor plan. Starts here; manager.js moves it to #mini-slot in the manager view. -->
+          <div class="plan" id="plan">
+            <div class="plan-svg" id="plan-svg" aria-hidden="true"></div>
+            <div class="plan-dots" id="plan-dots"></div>
+            <div class="pop" id="pop" role="dialog" aria-labelledby="pop-name" hidden></div>
+          </div>
+
+          <aside class="lv-panel" id="lv-panel" aria-label="Alerts and access">
+            <button type="button" class="btn secondary panel-toggle" id="panel-toggle" aria-expanded="true" aria-controls="panel-body">Hide panel</button>
+            <div class="panel-body" id="panel-body">
+              <details class="disclose">
+                <summary data-attn-head="all" data-label="Needs attention">Needs attention</summary>
+                <div class="ruled attn-list" data-attn="all"></div>
+              </details>
+              <details class="disclose al-disclose" id="al-disclose">
+                <summary id="al-sum">Alert history</summary>
+                <div>
+                  <p class="xs muted">Last 12 hours</p>
+                  <div class="al-stats" id="al-stats"></div>
+                  <div class="ruled al-list" data-alerts></div>
+                  <h3 class="sub-h">Alerts by day, last 14 days</h3>
+                  <div class="al-chart" id="al-chart"></div>
+                  <p class="xs muted al-legend"><span class="key high"></span>High risk <span class="key watch"></span>Watch</p>
+                </div>
+              </details>
+              <details class="disclose">
+                <summary id="uti-sum">UTI watch</summary>
+                <div>
+                  <ul class="small uti-intro">
+                    <li>Temperature up</li>
+                    <li>Hydration down</li>
+                    <li>More night bathroom visits</li>
+                  </ul>
+                  <div class="ruled uti-list" id="uti-list"></div>
+                </div>
+              </details>
+              <details class="disclose">
+                <summary>Door access</summary>
+                <div class="ruled door-feed" id="door-feed"></div>
+              </details>
+            </div>
+          </aside>
         </div>
-        <p class="xs muted map-key">Ringed by risk:
-          <span class="chip high">High risk</span> <span class="chip watch">Watch</span> <span class="chip low">Low risk</span>
-          <span>Tap a resident for details.</span></p>
+
         <details class="disclose loc-disclose">
           <summary>List view</summary>
           <div class="ruled loc-list" id="loc-list"></div>
         </details>
       </section>
-      <!-- 3. Needs attention -->
-      <section class="section m-attn" id="attention" aria-labelledby="at-h">
-        <div class="section-head"><h2 id="at-h">Needs attention</h2><span class="small muted" id="at-count"></span></div>
-        <div class="ruled attn-list" id="attn-list"></div>
-      </section>
-
-      <!-- 4. Staff on shift (full list in a pop-up) -->
-      <section class="section m-staff" id="staff" aria-labelledby="st-h">
-        <div class="section-head"><h2 id="st-h">On shift</h2><span class="small muted" id="shift-text"></span></div>
-        <button type="button" class="staff-strip" id="staff-strip"></button>
-      </section>
-
     </div>
 
     <!-- Printed only -->
     <section class="print-summary" id="print-summary" aria-hidden="true"></section>
   </main>
 
-  <script src="assets/js/scoring.js?v=3"></script>
-  <script src="assets/js/data.js?v=3"></script>
-  <script src="assets/js/ui.js?v=3"></script>
-  <script src="assets/js/manager.js?v=3"></script>
+  <script src="assets/js/scoring.js?v=4"></script>
+  <script src="assets/js/data.js?v=4"></script>
+  <script src="assets/js/ui.js?v=4"></script>
+  <script src="assets/js/manager.js?v=4"></script>
 </body>
 </html>

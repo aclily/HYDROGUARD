@@ -1,4 +1,4 @@
-/* Door reader (door.html). One orchestrated moment: reading → unlocked → relock. */
+/* Door reader (door.html). One orchestrated moment: reading, then unlocked, then relock. */
 
 .door-main { max-width: 640px; padding-top: var(--s3); }
 .door-note {
@@ -15,9 +15,9 @@
 
 .door-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3); }
 .door-reader p { margin: 0; }
-.door-room-label { font-size: var(--fs-sm); color: rgba(255, 255, 255, 0.75); }
-.door-room { font-size: 7.5rem; line-height: 0.9; letter-spacing: -0.04em; margin: 2px 0 6px; }
-.door-wing { font-size: var(--fs-sm); color: rgba(255, 255, 255, 0.8); }
+.door-wing { font-size: var(--fs-md); color: rgba(255, 255, 255, 0.85); }
+/* Wing first, then the room in big serif */
+.door-room { font-size: clamp(3rem, 14vw, 5rem); line-height: 0.95; letter-spacing: -0.03em; margin: 2px 0 0; }
 
 .door-icon {
   position: relative; width: 84px; height: 84px; flex: none; border-radius: 50%;
@@ -55,7 +55,6 @@
 
 .door-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .door-more { padding: var(--s3) 0 0; }
-.door-page .more-btn { min-height: 40px; }
 .door-actions .btn svg { width: 18px; height: 18px; }
 @media (max-width: 479px) { .door-actions .btn { flex: 1 1 100%; } }
 
@@ -67,7 +66,7 @@
 
 @media (min-width: 900px) {
   .door-main { padding-top: var(--s5); }
-  .door-room { font-size: 10rem; }
+  .door-room { font-size: 6.5rem; }
 }
 .door-page > footer.wrap { max-width: 640px; }
 

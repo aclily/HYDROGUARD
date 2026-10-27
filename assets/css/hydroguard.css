@@ -168,10 +168,11 @@ p { margin: 0 0 var(--s2); max-width: 68ch; }
 .hg-logo .word { font: 500 19px/1 var(--sans); letter-spacing: 0.04em; }
 .hg-logo .word .hydro { color: var(--accent); }
 .hg-logo .word .guard { color: var(--ink); }
-.hg-header .context { font-size: var(--fs-sm); color: var(--ink-2); border-left: 1px solid var(--rule); padding-left: var(--s3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hg-header .context { font-size: var(--fs-sm); color: var(--ink-2); border-left: 1px solid var(--rule); padding-left: var(--s3); line-height: 1.25; min-width: 0; }
+@media (max-width: 419px) { .hg-header .context { font-size: var(--fs-xs); } }
 .hg-header .spacer { flex: 1; }
 .icon-btn {
-  width: 36px; height: 36px; border-radius: var(--radius); border: 1px solid var(--rule);
+  width: 44px; height: 44px; flex: none; border-radius: var(--radius); border: 1px solid var(--rule);
   background: var(--surface); display: grid; place-items: center; cursor: pointer; color: var(--ink);
 }
 .icon-btn:hover { border-color: var(--rule-strong); }
@@ -192,7 +193,7 @@ p { margin: 0 0 var(--s2); max-width: 68ch; }
 body.has-tabs { padding-bottom: 72px; }
 @media (min-width: 900px) {
   .hg-tabs { position: static; border: 0; background: none; padding: 0; gap: var(--s1); }
-  .hg-tabs a { flex: none; flex-direction: row; padding: 6px 10px; border-radius: var(--radius); font-size: var(--fs-sm); }
+  .hg-tabs a { flex: none; flex-direction: row; align-items: center; min-height: 44px; padding: 0 10px; border-radius: var(--radius); font-size: var(--fs-sm); }
   .hg-tabs a[aria-current="page"] { background: var(--aqua-50); color: var(--aqua-600); }
   :root[data-theme="dark"] .hg-tabs a[aria-current="page"] { background: var(--rule); color: var(--accent-ink); }
   body.has-tabs { padding-bottom: 0; }
@@ -208,7 +209,7 @@ body.has-tabs { padding-bottom: 72px; }
   border: 1px solid rgba(255,255,255,0.18); pointer-events: none;
 }
 .block > * { position: relative; z-index: 1; }
-.block.moss { background: #04432F; }
+.block.moss { background: var(--moss-800); }
 .block.coral { background: var(--coral-800); }
 .block.lilac { background: var(--lilac-800); }
 .block.aqua { background: var(--aqua-600); }
@@ -238,7 +239,7 @@ body.has-tabs { padding-bottom: 72px; }
 /* ---------- Risk chips ---------- */
 .chip {
   display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: var(--radius-sm);
-  font-size: var(--fs-xs); font-weight: 600; line-height: 1.5; white-space: nowrap;
+  font-size: var(--fs-xs); font-weight: 600; line-height: 1.5; max-width: 100%; /* wraps rather than overflows */
   background: var(--bg-sunk); color: var(--ink-2);
 }
 .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -256,7 +257,7 @@ body.has-tabs { padding-bottom: 72px; }
 /* ---------- Buttons & controls ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
-  min-height: 40px; padding: 0 var(--s4); border-radius: var(--radius); border: 1px solid transparent;
+  min-height: 44px; padding: 0 var(--s4); border-radius: var(--radius); border: 1px solid transparent;
   background: var(--navy); color: #fff; font-weight: 600; font-size: var(--fs-sm);
   cursor: pointer; text-decoration: none;
 }
@@ -268,10 +269,10 @@ body.has-tabs { padding-bottom: 72px; }
 .btn.block-btn { width: 100%; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: var(--radius); padding: 2px; gap: 2px; background: var(--surface); }
-.seg button { border: 0; background: none; padding: 6px 10px; border-radius: 7px; font-size: var(--fs-sm); font-weight: 500; color: var(--ink-2); cursor: pointer; }
+.seg button { border: 0; background: none; min-height: 44px; padding: 0 10px; border-radius: 7px; font-size: var(--fs-sm); font-weight: 500; color: var(--ink-2); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--navy); color: #fff; }
 :root[data-theme="dark"] .seg button[aria-pressed="true"] { background: var(--accent); color: var(--navy); }
-.input { min-height: 40px; padding: 0 var(--s3); border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--surface); }
+.input { min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--surface); }
 input[type="range"] { accent-color: var(--accent); width: 100%; }
 
 /* ---------- Avatar ---------- */
@@ -337,7 +338,8 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 
 @media print {
   body { border-top: 0; }
-  .hg-header, .hg-tabs, .no-print, .hg-toast { display: none !important; }
+  .hg-header, .hg-tabs, .no-print, .hg-toast, .score-help { display: none !important; }
+  details.disclose > summary::after { display: none; }
 }
 
 /* ---------- Progressive disclosure ----------
@@ -346,7 +348,7 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
    details.disclose : inline expander for lists that sit in the page flow */
 .more-row { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .more-btn {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px;
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px;
   border: 1px solid var(--rule-strong); border-radius: 999px; background: var(--surface); color: var(--ink);
   font-size: var(--fs-sm); font-weight: 500; cursor: pointer; text-decoration: none;
 }
@@ -362,7 +364,7 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 details.disclose { border-top: 1px solid var(--rule); }
 details.disclose > summary {
   list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
-  min-height: 40px; font-weight: 500; font-size: var(--fs-sm); color: var(--ink);
+  min-height: 44px; font-weight: 500; font-size: var(--fs-sm); color: var(--ink);
 }
 details.disclose > summary::-webkit-details-marker { display: none; }
 details.disclose > summary::after {
@@ -385,3 +387,52 @@ details.disclose > :not(summary) { padding-bottom: var(--s3); }
   .sheet.popup.open { transform: translate(-50%, -50%); opacity: 1; pointer-events: auto; transition: transform .2s ease, opacity .2s; }
   .sheet.popup .grab { display: none; }
 }
+
+/* ---------- Label–value rows (dl.kv) ----------
+   <dl class="kv"><div><dt>Diet</dt><dd>Assisted</dd></div>…</dl>. Ruled rows; label column sized to content. */
+dl.kv { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); font-size: var(--fs-sm); }
+dl.kv > div { display: contents; }
+dl.kv dt, dl.kv dd { margin: 0; padding: 6px 0; border-top: 1px solid var(--rule); }
+dl.kv dt { color: var(--ink-2); padding-right: var(--s3); }
+dl.kv dd { overflow-wrap: anywhere; }
+dl.kv > div:first-child > dt, dl.kv > div:first-child > dd { border-top: 0; }
+dl.kv ul { margin: 0; padding-left: 1.1em; }
+.block dl.kv dt { color: inherit; opacity: 0.75; }
+.block dl.kv dt, .block dl.kv dd { border-color: rgba(255,255,255,0.2); }
+.block.light dl.kv dt, .block.light dl.kv dd { border-color: var(--rule); }
+
+/* ---------- Score help: "?" in the top-right corner of a section ---------- */
+.score-help { border-color: transparent; background: none; color: var(--ink-2); }
+.score-help:hover { border-color: var(--rule); color: var(--ink); }
+.score-help svg { width: 20px; height: 20px; }
+.block .score-help { color: rgba(255,255,255,0.8); }
+.block .score-help:hover { border-color: rgba(255,255,255,0.3); color: #fff; }
+.block.light .score-help { color: var(--ink-2); }
+.score-help-body > * + * { margin-top: var(--s3); }
+.score-help-body p { margin-bottom: 0; }
+.sh-table th[scope="row"] { font-weight: 500; color: var(--ink); }
+.sh-table td, .sh-table th { vertical-align: top; }
+.sh-table .num { text-align: right; }
+.sh-table tfoot th, .sh-table tfoot td { border-bottom: 0; border-top: 1px solid var(--rule-strong); }
+.sh-pts { display: inline-block; min-width: 1.8em; text-align: center; padding: 0 4px; border-radius: var(--radius-sm); font-weight: 600; }
+.sh-pts.s0 { background: var(--low-bg); color: var(--low-ink); }
+.sh-why { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-weight: 500; }
+.sh-sub { font-size: var(--fs-md); padding-top: var(--s3); border-top: 1px solid var(--rule); }
+.sh-list { margin: 0; padding-left: 1.1em; }
+.sh-levels { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sh-levels .chip { min-width: 76px; margin-right: 6px; }
+.sh-note { border-left: 3px solid var(--high-mark); padding: 6px var(--s3); background: var(--high-bg); color: var(--high-ink); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+
+/* ---------- Resuscitation button (HG.resusButton) ----------
+   Pages place and size it; the base is a quiet, left-aligned button. Hide .resus-k where the label is redundant. */
+.resus-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 44px; width: 100%;
+  padding: 6px var(--s3); border: 0; border-left: 4px solid var(--ink); border-radius: var(--radius-sm);
+  background: var(--bg-sunk); color: var(--ink); text-align: left; cursor: pointer; line-height: 1.25;
+}
+.resus-btn:hover { background: color-mix(in srgb, var(--bg-sunk) 70%, var(--rule)); }
+.resus-k { font-size: var(--fs-xs); color: var(--ink-2); }
+.resus-status { font-weight: 700; font-size: var(--fs-base); text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
+.resus-rev { font-size: var(--fs-xs); color: var(--ink-2); }
+.resus-acd { margin-top: var(--s2); }
+@media print { .resus-btn { border-left-color: #15173F; } .resus-status { text-decoration: none; } }

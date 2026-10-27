@@ -6,44 +6,49 @@
   <title>HydroGuard demo</title>
   <meta name="description" content="HydroGuard demo: a resident wristband that checks temperature, heart rate and hydration every 2 hours, opens their door and shows where they are. Demo only.">
   <link rel="icon" href="assets/img/logo/hydroguard-mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="assets/css/hydroguard.css?v=3">
-  <link rel="stylesheet" href="assets/css/hub.css?v=3">
+  <link rel="stylesheet" href="assets/css/hydroguard.css?v=4">
+  <link rel="stylesheet" href="assets/css/hub.css?v=4">
 </head>
 <body>
   <main class="wrap hub" id="main">
     <section class="hub-top" aria-labelledby="hub-h">
       <div class="hub-lead">
         <h1 id="hub-h">A wristband that notices first</h1>
-        <p>A resident wristband that checks temperature, heart rate and hydration every 2 hours, so staff catch early signs of a UTI or dehydration.</p>
+        <p>Checks temperature, heart rate and hydration every 2 hours, so staff catch early signs of UTI or dehydration.</p>
       </div>
       <details class="disclose hub-more">
         <summary>What it does</summary>
         <ul class="does ruled" aria-label="What the wristband does">
           <li><span class="does-icon" data-icon="thermo"></span><span><strong>Checks every 2 hours.</strong> Temperature, heart rate and a hydration index, scored 0 to 9.</span></li>
-          <li><span class="does-icon" data-icon="key"></span><span><strong>Opens their door.</strong> Tap the band on the door reader. No keys to lose.</span></li>
+          <li><span class="does-icon" data-icon="key"></span><span><strong>Opens their door.</strong> Tap the band on the reader.</span></li>
           <li><span class="does-icon" data-icon="pin"></span><span><strong>Shows where they are.</strong> Lounge, garden, dining room or their own room.</span></li>
         </ul>
       </details>
       <div id="live" class="hub-live"></div>
     </section>
 
-    <section class="section" aria-labelledby="res-h">
-      <div class="section-head">
-        <h2 id="res-h">Residents</h2>
-        <span class="small muted">Tap to open a profile</span>
-      </div>
-      <ul class="res-grid" id="res-grid"></ul>
+    <section class="section" aria-labelledby="staff-h">
+      <div class="section-head"><h2 id="staff-h">Staff views</h2></div>
+      <ul class="view-list ruled" id="staff-list"></ul>
     </section>
 
-    <section class="section" aria-labelledby="other-h">
-      <div class="section-head"><h2 id="other-h">Other views</h2><a class="small nfc-link" href="tags.html">Set up NFC tags</a></div>
-      <ul class="other-list ruled" id="other-list"></ul>
+    <section class="section" aria-labelledby="res-h">
+      <div class="section-head">
+        <h2 id="res-h">Resident views</h2>
+        <span class="small muted">What each wristband tag opens</span>
+      </div>
+      <ul class="res-grid" id="res-grid"></ul>
+      <ul class="view-list doors" id="door-list"></ul>
+    </section>
+
+    <section class="section hub-nfc" aria-label="NFC tags">
+      <a class="more-btn" href="tags.html"><span data-icon="nfc"></span><span>Set up NFC tags</span></a>
     </section>
   </main>
 
-  <script src="assets/js/scoring.js?v=3"></script>
-  <script src="assets/js/data.js?v=3"></script>
-  <script src="assets/js/ui.js?v=3"></script>
-  <script src="assets/js/hub.js?v=3"></script>
+  <script src="assets/js/scoring.js?v=4"></script>
+  <script src="assets/js/data.js?v=4"></script>
+  <script src="assets/js/ui.js?v=4"></script>
+  <script src="assets/js/hub.js?v=4"></script>
 </body>
 </html>

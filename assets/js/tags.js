@@ -33,11 +33,11 @@
   function hint() {
     const h = $('#base-hint');
     if (/^file:/i.test(base)) {
-      h.innerHTML = '<strong>This is a file on your computer.</strong> Phones can’t open it from a tag. Put the site on GitHub Pages first (see README.md), then open this page on the live site or type the live address above.';
+      h.innerHTML = '<strong>This is a file on your computer.</strong> Phones can’t open it. Publish to GitHub Pages (see README.md), then use the live address.';
     } else if (/^https?:\/\/(localhost|127\.|192\.168\.|10\.)/i.test(base)) {
       h.innerHTML = '<strong>This is a local test address.</strong> Only devices on this network can open it. Use your live GitHub Pages address for real tags.';
     } else {
-      h.textContent = 'All links below start with this address. If you move the site, change it here and rewrite the tags.';
+      h.textContent = 'All links start with this address. If the site moves, change it and rewrite the tags.';
     }
   }
 
@@ -70,7 +70,7 @@
     {
       id: 'door', label: 'Doors', title: 'Door readers', icon: 'key',
       note: 'Opens the door screen, as if the resident tapped their band to unlock it.',
-      items: R.slice().sort((a, b) => a.room - b.room).map(r => ({ label: `Room ${r.room} door`, place: `Door reader, room ${r.room} (${pos(r.preferred)} room)`, path: `door.html?room=${encodeURIComponent(r.room)}` })),
+      items: R.slice().sort((a, b) => a.wing.localeCompare(b.wing) || a.room - b.room).map(r => ({ label: `${HG.where(r)} door`, place: `Door reader (${pos(r.preferred)} room)`, path: `door.html?room=${encodeURIComponent(r.room)}` })),
     },
     {
       id: 'staff', label: 'Staff', title: 'Staff screens', icon: 'chart',
@@ -91,7 +91,7 @@
       id: 'extra', label: 'Extras', title: 'Extra links', icon: 'pin',
       note: 'Optional. Open a staff screen with one resident already picked.',
       items: R.flatMap(r => [
-        { label: `${r.preferred} on the ward`, place: `Bedside chart, room ${r.room}`, path: `nurse.html?id=${r.id}` },
+        { label: `${r.preferred} on the ward`, place: `Bedside chart, ${HG.where(r)}`, path: `nurse.html?id=${r.id}` },
         { label: `${r.preferred} on the floor plan`, place: `Staff room board, ${r.wing} wing`, path: `manager.html?id=${r.id}#map` },
       ]),
     },

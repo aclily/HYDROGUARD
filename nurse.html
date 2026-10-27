@@ -6,14 +6,20 @@
   <title>Ward dashboard – HydroGuard</title>
   <link rel="icon" href="assets/img/logo/hydroguard-mark.svg" type="image/svg+xml">
   <meta name="description" content="RN ward dashboard: residents sorted by HydroGuard risk, alerts, fluids and handover notes. Demo only.">
-  <link rel="stylesheet" href="assets/css/hydroguard.css?v=3">
-  <link rel="stylesheet" href="assets/css/nurse.css?v=3">
+  <link rel="stylesheet" href="assets/css/hydroguard.css?v=4">
+  <link rel="stylesheet" href="assets/css/nurse.css?v=4">
 </head>
 <body>
   <main class="wrap nurse" id="main">
     <div class="nurse-head">
-      <h1>Ward residents</h1>
-      <p class="small muted" id="who"></p>
+      <div class="nurse-title">
+        <h1 id="ward-h">Banksia residents</h1>
+        <p class="small muted" id="who"></p>
+      </div>
+      <div class="wing-pick">
+        <span class="small muted" id="wing-l">Wing</span>
+        <div class="seg wings" id="wings" role="group" aria-labelledby="wing-l"></div>
+      </div>
     </div>
 
     <section class="block shift" id="shift" aria-label="Shift summary"></section>
@@ -28,7 +34,7 @@
         <div class="toolbar">
           <div class="list-title">
             <h2 id="list-h" class="sub-h">Residents by risk</h2>
-            <span id="rules-btn"></span>
+            <span id="score-help"></span>
           </div>
           <label class="search">
             <span class="visually-hidden">Search by name or room</span>
@@ -47,9 +53,9 @@
     </div>
   </main>
 
-  <script src="assets/js/scoring.js?v=3"></script>
-  <script src="assets/js/data.js?v=3"></script>
-  <script src="assets/js/ui.js?v=3"></script>
-  <script src="assets/js/nurse.js?v=3"></script>
+  <script src="assets/js/scoring.js?v=4"></script>
+  <script src="assets/js/data.js?v=4"></script>
+  <script src="assets/js/ui.js?v=4"></script>
+  <script src="assets/js/nurse.js?v=4"></script>
 </body>
 </html>

@@ -1,4 +1,6 @@
 /* HydroGuard — Nurse Unit Manager dashboard (manager.html)
+   Two views on one page: the manager view (manager.html) and the locations view (manager.html#map,
+   manager.html?id=<id>#map from NFC tags). The view follows the URL and switches without a reload.
    Demo interactions persist in localStorage under hg-mgr-* (urine test requests).
    Reads hg-acks (written by the ward page) so acknowledged alerts show up here too. */
 (function (HG) {
@@ -22,60 +24,45 @@
 
   // ---------- Helpers ----------
   const pad2 = n => String(n).padStart(2, '0');
-  const fmtDMY = d => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
-  const fmtDM = d => `${d.getDate()}/${d.getMonth() + 1}`;
   const first = r => r.preferred || r.name.split(' ')[0];
   const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
   const hash = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
   const median = arr => { const a = [...arr].sort((x, y) => x - y); const m = a.length >> 1; return a.length ? (a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2) : 0; };
-  const zoneText = (loc, r) => loc === 'room' ? `room ${r.room}` : HG.ZONES[loc].label.toLowerCase();
+  const zoneText = (loc, r) => loc === 'room' ? `own room, ${HG.where(r)}` : HG.ZONES[loc].label.toLowerCase();
   const ago = d => { const s = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000)); return s < 60 ? (s < 5 ? 'just now' : `${s} sec ago`) : HG.fmtAgo(d); };
+  const telHref = p => 'tel:' + p.replace(/[^\d+]/g, '');
+  const byRisk = (a, b) => HG.LEVELS[a.risk.level].rank - HG.LEVELS[b.risk.level].rank || b.risk.total - a.risk.total;
 
-  // ---------- Header: "Locations" is current when the hash is #map ----------
+  // ---------- Which view: #map (or a resident tag link ?id=<id>) is the locations view ----------
+  const focusId = HG.resident(HG.param('id') || '') ? HG.param('id') : null;
+  const isMap = () => location.hash === '#map' || (!!HG.resident(HG.param('id') || '') && !location.hash);
+
   const header = HG.mountHeader({
     context: HG.FACILITY.name,
     tabs: [
       { href: 'nurse.html', label: 'Ward', icon: 'people' },
-      { href: 'manager.html#map', label: 'Locations', icon: 'map', current: location.hash === '#map' },
-      { href: 'manager.html', label: 'Manager', icon: 'chart', current: location.hash !== '#map' },
+      { href: 'manager.html#map', label: 'Locations', icon: 'map', current: isMap() },
+      { href: 'manager.html', label: 'Manager', icon: 'chart', current: !isMap() },
       { href: 'index.html', label: 'Demo', icon: 'home' },
     ],
   });
   function syncTabs() {
     const links = header.querySelectorAll('.hg-tabs a');
-    const onMap = location.hash === '#map';
+    const onMap = isMap();
     links.forEach(a => a.removeAttribute('aria-current'));
     if (links[onMap ? 1 : 2]) links[onMap ? 1 : 2].setAttribute('aria-current', 'page');
   }
-  window.addEventListener('hashchange', syncTabs);
 
-  // ---------- Pop-ups: secondary detail lives here, out of the page flow ----------
-  // Each body is a fixed element (so ids and event handlers survive), filled by the render functions below.
+  // ---------- Reports pop-up (a tool, so it stays a pop-up) ----------
   const POP = {
-    alerts: HG.popup({ title: 'Alert history', body: HG.h(`<div>
-      <p class="xs muted pop-sub">Last 12 hours</p>
-      <div class="al-stats" id="al-stats"></div>
-      <div class="table-scroll"><table class="table al-table" id="al-table"></table></div>
-      <h3 class="sub-h">Alerts by day, last 14 days</h3>
-      <div class="al-chart" id="al-chart"></div>
-      <p class="xs muted al-legend"><span class="key high"></span>High risk <span class="key watch"></span>Watch</p></div>`) }),
-    uti: HG.popup({ title: 'UTI watch', body: HG.h(`<div>
-      <p class="small muted">Temperature rising while hydration falls and night bathroom visits go up.</p>
-      <div class="ruled uti-list" id="uti-list"></div></div>`) }),
-    doors: HG.popup({ title: 'Door access', body: HG.h('<div><div class="ruled door-feed" id="door-feed"></div></div>') }),
-    staff: HG.popup({ title: 'On shift now', body: HG.h(`<div>
-      <p class="xs muted pop-sub" id="shift-pop"></p>
-      <div class="ruled staff-list" id="staff-list"></div></div>`) }),
     reports: HG.popup({ title: 'Reports', body: HG.h(`<div>
       <button type="button" class="btn block-btn" id="print-btn"></button>
       <div class="ruled report-list" id="report-list"></div></div>`) }),
   };
-  // Re-draw the bar chart once the pop-up has its real width
-  const openAlerts = { open() { POP.alerts.open(); requestAnimationFrame(renderAlertChart); } };
 
-  $('#shift-text').textContent = (HG.SHIFT || '').replace(/^[^,]*, /, '');
-  $('#shift-pop').textContent = HG.SHIFT || '';
-  $('#who').textContent = `${ME.name}, ${ME.role}. ${HG.fmtDay(NOW)}, ${HG.fmtTime(NOW)}`;
+  const shiftHours = (HG.SHIFT || '').replace(/^[^,]*, /, '');
+  $('#shift-text').textContent = shiftHours;
+  $('#who').textContent = `${ME.name} ${ME.short}, ${HG.fmtDMY(NOW)}, ${HG.fmtTime(NOW)}`;
 
   // ---------- Made-up device data ----------
   const BATTERY = { margaret: 72, ravi: 64, elsie: 81, bill: 55, wei: 90, dorothy: 47, joan: 68, kev: 18 };
@@ -87,31 +74,55 @@
   function renderOverview() {
     const c = counts(R);
     $('#ov-time').textContent = `Readings at ${HG.fmtTime(LT)}`;
-    const wingRows = HG.FACILITY.wings.map(w => {
-      const rs = R.filter(r => r.wing === w);
-      const wc = counts(rs);
-      const text = LEVEL_ORDER.map(l => `${wc[l]} ${HG.LEVELS[l].label.toLowerCase()}`).join(', ');
-      const segs = LEVEL_ORDER.filter(l => wc[l]).map(l =>
-        `<span class="seg-${l}" style="flex:${wc[l]}">${wc[l]}</span>`).join('');
-      return `
-        <div class="wing-row">
-          <span class="small">${w}</span>
-          <div class="stack-bar" role="img" aria-label="${w} wing, ${plural(rs.length, 'resident')}: ${text}">${segs}</div>
-        </div>`;
-    }).join('');
-
+    $('#ov-help').innerHTML = HG.scoreHelp();
     const lowBat = R.filter(r => BATTERY[r.id] < 25);
     const next = new Date(LT.getTime() + 2 * 3600e3);
     const batText = lowBat.length
-      ? ` ${lowBat.map(r => `${HG.esc(first(r))}’s is at ${BATTERY[r.id]}%`).join(', ')}. Charge before ${HG.fmtTime(next)}.`
-      : ' All charged.';
+      ? `${lowBat.map(r => `${HG.esc(first(r))} ${BATTERY[r.id]}%`).join(', ')}, charge before ${HG.fmtTime(next)}`
+      : 'None';
     $('#ov-block').innerHTML = `
       <div class="ov-nums">
-        <div class="ov-num"><span class="reading">${R.length}</span><span class="small">residents</span></div>
-        ${LEVEL_ORDER.map(l => `<div class="ov-num"><span class="reading">${c[l]}</span>${HG.riskChip(l)}</div>`).join('')}
+        ${LEVEL_ORDER.map(l => `<div class="ov-num"><span class="reading ov-${l}">${c[l]}</span>${HG.riskChip(l)}</div>`).join('')}
+        <div class="ov-num ov-total"><span class="reading">${R.length}</span><span class="small">Residents</span></div>
       </div>
-      <div class="ov-wings">${wingRows}</div>
-      <p class="xs ov-bands">${R.length} of ${R.length} wristbands reported.${batText}</p>`;
+      <dl class="kv ov-bands">
+        <div><dt>Wristbands</dt><dd>${R.length} of ${R.length} reporting</dd></div>
+        <div><dt>Low battery</dt><dd>${batText}</dd></div>
+      </dl>`;
+  }
+
+  // =====================================================================
+  // Wing columns: nurse on shift, risk bar, actions for that wing
+  // =====================================================================
+  function renderWings() {
+    HG.$$('.wing-col').forEach(col => {
+      const w = col.dataset.wing;
+      const rs = R.filter(r => r.wing === w);
+      const wc = counts(rs);
+      const nurse = Object.values(HG.STAFF).find(s => s.wing === w && (s.short === 'RN' || s.short === 'EN'));
+      const segs = LEVEL_ORDER.filter(l => wc[l]).map(l =>
+        `<span class="seg-${l}" style="flex:${wc[l]}">${wc[l]}</span>`).join('');
+      const text = LEVEL_ORDER.map(l => `${wc[l]} ${HG.LEVELS[l].label.toLowerCase()}`).join(', ');
+      const hid = `wing-h-${w.toLowerCase()}`;
+      col.innerHTML = `
+        <h2 id="${hid}">${HG.esc(w)}</h2>
+        ${nurse ? `
+        <div class="wing-nurse">
+          ${HG.avatar(nurse)}
+          <div class="wing-nurse-who"><span class="xs muted">Nurse on shift</span>
+            <strong>${HG.esc(nurse.name)} ${nurse.short}</strong><span class="small muted">${HG.esc(shiftHours)}</span></div>
+          <div class="wing-btns">
+            <a class="btn secondary" href="${telHref(nurse.phone)}" aria-label="Call ${HG.esc(nurse.name.split(' ')[0])}">${HG.icon.phone}Call</a>
+            <a class="btn secondary" href="nurse.html?wing=${encodeURIComponent(w)}" aria-label="${HG.esc(w)} residents">Residents</a>
+          </div>
+        </div>` : ''}
+        <div class="wing-risk">
+          <div class="stack-bar" aria-hidden="true">${segs}</div>
+          <p class="xs muted">${plural(rs.length, 'resident')}: ${text}</p>
+        </div>
+        <h3 class="wing-sub" data-attn-head="${HG.esc(w)}" data-label="Actions">Actions</h3>
+        <div class="ruled attn-list" data-attn="${HG.esc(w)}"></div>`;
+    });
   }
 
   // =====================================================================
@@ -135,10 +146,16 @@
   let openId = null;
   const doorFeed = [];
 
+  // Height: the locations view fills as much of the window as is sensible; the mini map keeps its shape
+  function planHeight(W) {
+    if (!isMap()) return Math.round(W * 0.8);
+    if (W < 600) return Math.round(W * 0.9);
+    return Math.max(Math.round(W * 0.45), Math.min(Math.round(W * 0.7), innerHeight - 200));
+  }
   function drawPlan() {
     const host = $('#plan-svg');
-    const W = Math.max(300, host.clientWidth || 340);
-    const H = Math.round(W * (W < 600 ? 0.9 : 0.62));
+    const W = Math.max(280, host.clientWidth || 340);
+    const H = planHeight(W);
     host.parentNode.style.height = H + 'px';
     const X = v => (v / 100) * W, Y = v => (v / 100) * H;
     let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
@@ -167,7 +184,7 @@
 
   function layoutDots() {
     const host = $('#plan-dots');
-    const spacing = host.clientWidth < 600 ? 30 : 46;
+    const spacing = host.clientWidth < 600 ? 32 : 46;
     const groups = {};
     R.forEach(r => (groups[groupKey(r)] = groups[groupKey(r)] || []).push(r));
     Object.values(groups).forEach(list => {
@@ -204,16 +221,16 @@
         ${HG.avatar(r)}
         <div class="pop-who">
           <h3 id="pop-name" tabindex="-1">${HG.esc(r.name)}</h3>
-          <p class="xs muted">Room ${r.room}, ${r.wing} wing</p>
+          <p class="xs muted">${HG.esc(HG.where(r))}</p>
         </div>
         <button type="button" class="icon-btn pop-close" aria-label="Close details">${HG.icon.close}</button>
       </div>
-      <div class="ruled pop-rows small">
-        <div class="row-between"><span class="muted">Risk</span>${HG.riskChip(r.risk.level)}</div>
-        <div class="row-between"><span class="muted">Now in</span><span>${HG.esc(zoneText(st.loc, r).replace(/^./, c => c.toUpperCase()))}</span></div>
-        <div class="row-between"><span class="muted">Last seen</span><span data-seen>${ago(st.seen)}</span></div>
-        <div class="row-between"><span class="muted">Nurse</span><span>${HG.esc(nurse ? `${nurse.name.split(' ')[0]} (${nurse.short})` : 'Not set')}</span></div>
-      </div>
+      <dl class="kv pop-rows">
+        <div><dt>Risk</dt><dd>${HG.riskChip(r.risk.level)}</dd></div>
+        <div><dt>Now in</dt><dd>${HG.esc(HG.ZONES[st.loc].label)}</dd></div>
+        <div><dt>Last seen</dt><dd data-seen>${ago(st.seen)}</dd></div>
+        <div><dt>Nurse</dt><dd>${HG.esc(nurse ? `${nurse.name.split(' ')[0]} ${nurse.short}` : 'Not set')}</dd></div>
+      </dl>
       <div class="row pop-links">
         <a class="btn" href="resident.html?id=${r.id}">Open profile</a>
         <a class="btn secondary" href="report.html?id=${r.id}">Health report</a>
@@ -254,7 +271,7 @@
       const rs = R.filter(r => live[r.id].loc === z);
       if (!rs.length && (z === 'bathroom')) return '';
       const people = rs.length
-        ? rs.map(r => `<a class="loc-person" href="resident.html?id=${r.id}">${HG.esc(first(r))}${z === 'room' ? ` (room ${r.room})` : ''}</a> ${HG.riskChip(r.risk.level)}`).join('')
+        ? rs.map(r => `<a class="loc-person" href="resident.html?id=${r.id}">${HG.esc(first(r))}${z === 'room' ? ` (${HG.esc(HG.where(r))})` : ''}</a> ${HG.riskChip(r.risk.level)}`).join('')
         : '<span class="faint">Nobody here</span>';
       return `<div class="loc-row"><span class="loc-zone">${HG.ZONES[z].label}</span><span class="loc-people">${people}</span></div>`;
     }).join('');
@@ -262,8 +279,8 @@
 
   // Door access: unlocks from each resident's events, plus a made-up refused attempt
   R.forEach(r => r.events.filter(e => /door unlocked/i.test(e.text)).forEach(e =>
-    doorFeed.push({ time: e.time, r, text: `Room ${r.room} door unlocked`, ok: true })));
-  doorFeed.push({ time: new Date(LT.getTime() - 25 * 60e3), r: HG.resident('bill'), text: 'Tried room 3 door. Not his room, so it stayed locked', ok: false });
+    doorFeed.push({ time: e.time, r, text: `${HG.where(r)} door unlocked`, ok: true })));
+  doorFeed.push({ time: new Date(LT.getTime() - 25 * 60e3), r: HG.resident('bill'), text: `Tried ${HG.where(HG.resident('dorothy'))} door. Not his room, so it stayed locked`, ok: false });
   function renderDoorFeed() {
     doorFeed.sort((a, b) => b.time - a.time);
     $('#door-feed').innerHTML = doorFeed.slice(0, 8).map(d => `
@@ -283,11 +300,12 @@
     const options = DESTS.filter(z => z !== live[r.id].loc);
     const to = options[Math.floor(Math.random() * options.length)];
     live[r.id] = { loc: to, seen: new Date() };
-    if (to === 'room') doorFeed.push({ time: new Date(), r, text: `Room ${r.room} door unlocked`, ok: true });
+    if (to === 'room') doorFeed.push({ time: new Date(), r, text: `${HG.where(r)} door unlocked`, ok: true });
     lastUpdate = Date.now();
     layoutDots();
     renderLocList();
     renderDoorFeed();
+    renderAllResidents();
     if (openId === r.id) openPop(r.id);
   }
   setInterval(() => { if (!paused && !document.hidden) moveOne(); }, 8000);
@@ -305,6 +323,19 @@
   });
   const syncMotion = () => $('#plan').classList.toggle('no-motion', reduceMotion.matches);
   reduceMotion.addEventListener?.('change', syncMotion);
+
+  // Side panel beside the map (desktop) or below it (phones): hide it to give the plan the full width
+  function setPanel(show) {
+    const t = $('#panel-toggle');
+    t.setAttribute('aria-expanded', String(show));
+    t.textContent = show ? 'Hide panel' : 'Show panel';
+    $('#panel-body').hidden = !show;
+    $('#lv-panel').classList.toggle('is-collapsed', !show);
+    $('#map-slot').classList.toggle('has-panel', show);
+    if (isMap()) { drawPlan(); layoutDots(); }
+  }
+  $('#panel-toggle').addEventListener('click', e => setPanel(e.currentTarget.getAttribute('aria-expanded') !== 'true'));
+  $('#map-slot').classList.add('has-panel');
 
   // =====================================================================
   // 3. Alert response
@@ -346,31 +377,36 @@
   }
   const ALERTS = buildAlerts();
 
+  // One row list, drawn into every [data-alerts] container (manager view and the locations panel)
   function renderAlerts() {
     const done = ALERTS.filter(a => !a.open);
     const med = median(done.map(a => a.mins));
     const within = done.filter(a => a.mins <= 10).length;
     const openN = ALERTS.length - done.length;
+    $('#al-sum').textContent = `Alert history (${ALERTS.length})`;
     $('#al-stats').innerHTML = `
       <div class="callout"><span class="label">Median time to acknowledge</span><span class="line ${med <= 10 ? 'low' : 'watch'}"></span>
         <span class="reading al-val">${Math.round(med)}<span class="unit">min</span></span></div>
-      <p class="xs muted">${within} of ${done.length} acknowledged within 10 minutes.${openN ? ` ${plural(openN, 'alert')} still open.` : ''}</p>`;
-    $('#al-table').innerHTML = `
-      <thead><tr><th scope="col">Time</th><th scope="col">Resident</th><th scope="col" class="al-level">Level</th><th scope="col">Acknowledged</th></tr></thead>
-      <tbody>${ALERTS.map(a => `
-        <tr>
-          <td class="al-time">${HG.fmtTime(a.time)}</td>
-          <td><a href="resident.html?id=${a.r.id}">${HG.esc(first(a.r))}</a> <span class="faint xs">room ${a.r.room}</span>
-            <span class="al-chip-inline">${HG.riskChip(a.level)}</span>
-            <div class="xs muted">${HG.esc(a.reason)}</div></td>
-          <td class="al-level">${HG.riskChip(a.level)}</td>
-          <td>${a.open
-            ? `<span class="chip high plain">Open</span> <a class="xs" href="nurse.html">Go to ward</a>`
-            : `${HG.esc(a.by.split(' ')[0])} <span class="muted">in ${a.mins} min</span>`}</td>
-        </tr>`).join('')}</tbody>`;
+      <dl class="kv al-kv">
+        <div><dt>Within 10 min</dt><dd>${within} of ${done.length}</dd></div>
+        <div><dt>Still open</dt><dd>${openN ? plural(openN, 'alert') : 'None'}</dd></div>
+      </dl>`;
+    const rows = ALERTS.length ? ALERTS.map(a => `
+      <div class="al-row">
+        <span class="al-time small">${HG.fmtTime(a.time)}</span>
+        <div class="al-who">
+          <span><a href="resident.html?id=${a.r.id}"><strong>${HG.esc(first(a.r))}</strong></a> <span class="xs muted">${HG.esc(HG.where(a.r))}</span></span>
+          <span class="xs muted">${HG.esc(a.reason)}</span>
+        </div>
+        <span class="al-level">${HG.riskChip(a.level)}</span>
+        <div class="al-state small">${a.open
+          ? `<span class="chip high plain">Open</span> <a class="btn ghost" href="nurse.html?id=${a.r.id}">Go to ward</a>`
+          : `<span class="muted">Actioned by ${HG.esc(a.by.split(' ')[0])} in ${a.mins} min</span>`}</div>
+      </div>`).join('') : '<p class="small muted">No alerts in the last 12 hours</p>';
+    HG.$$('[data-alerts]').forEach(el => { el.innerHTML = rows; });
   }
 
-  // 14 days of alerts by level (made up, today's bar comes from the table above)
+  // 14 days of alerts by level (made up, today's bar comes from the list above)
   const DAYS = (() => {
     const watch = [3, 2, 4, 3, 2, 3, 5, 3, 4, 4, 5, 6, 6];
     const high = [0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 2, 2];
@@ -380,7 +416,7 @@
   })();
   function renderAlertChart() {
     const el = $('#al-chart');
-    const W = Math.max(280, el.clientWidth || 320), H = 150;
+    const W = Math.max(260, el.clientWidth || 300), H = 150;
     const pad = { t: 10, r: 4, b: 20, l: 22 };
     const max = Math.max(...DAYS.map(d => d.watch + d.high));
     const top = Math.ceil(max / 2) * 2 + 2;
@@ -390,16 +426,18 @@
     [0, top / 2, top].forEach(t => { s += `<line class="grid" x1="${pad.l}" x2="${W - pad.r}" y1="${y(t)}" y2="${y(t)}"/><text class="axis" x="${pad.l - 6}" y="${y(t) + 3}" text-anchor="end">${t}</text>`; });
     DAYS.forEach((d, i) => {
       const x = pad.l + i * bw + bw * 0.18, w = bw * 0.64;
-      const label = `${fmtDMY(d.date)}: ${d.high} high risk, ${d.watch} watch`;
+      const label = `${HG.fmtDMY(d.date)}: ${d.high} high risk, ${d.watch} watch`;
       s += `<g><title>${label}</title>`;
       s += `<rect class="b-watch" x="${x}" y="${y(d.watch)}" width="${w}" height="${y(0) - y(d.watch)}"/>`;
       s += `<rect class="b-high" x="${x}" y="${y(d.watch + d.high)}" width="${w}" height="${y(d.watch) - y(d.watch + d.high)}"/>`;
       s += '</g>';
-      if (i % 3 === 1 || d.today) s += `<text class="axis${d.today ? ' today' : ''}" x="${x + w / 2}" y="${H - 5}" text-anchor="middle">${d.today ? 'Today' : fmtDM(d.date)}</text>`;
+      if (i % 3 === 1 || d.today) s += `<text class="axis${d.today ? ' today' : ''}" x="${x + w / 2}" y="${H - 5}" text-anchor="middle">${d.today ? 'Today' : HG.fmtDate(d.date)}</text>`;
     });
     s += '</svg>';
     el.innerHTML = s;
   }
+  // The chart needs its real width, which it only has once the disclosure is open
+  $('#al-disclose').addEventListener('toggle', e => { if (e.currentTarget.open) renderAlertChart(); });
 
   // =====================================================================
   // 4. UTI watch
@@ -432,6 +470,7 @@
     const list = R.map(r => ({ r, u: utiSignals(r) })).filter(x => x.u.status)
       .sort((a, b) => (a.u.status === 'strong' ? 0 : 1) - (b.u.status === 'strong' ? 0 : 1));
     const notListed = R.filter(r => !utiSignals(r).status && r.risk.level === 'high');
+    $('#uti-sum').textContent = `UTI watch (${list.length})`;
     $('#uti-list').innerHTML = list.map(({ r, u }) => {
       const n = r.nightBathroom;
       const req = urineTests[r.id];
@@ -442,7 +481,7 @@
           <div class="row uti-top">
             ${HG.avatar(r)}
             <div class="uti-who"><a href="resident.html?id=${r.id}"><strong>${HG.esc(r.name)}</strong></a>
-              <span class="xs muted">Room ${r.room}, ${r.wing} wing</span></div>
+              <span class="xs muted">${HG.esc(HG.where(r))}</span></div>
             <span class="chip ${u.status === 'strong' ? 'high' : 'watch'}">${u.status === 'strong' ? 'Strong signs' : 'Possible'}</span>
           </div>
           <p class="small">${signText}.${r.allergies.length ? ` <span class="muted">Allergies: ${HG.esc(r.allergies.join(', '))}.</span>` : ''}</p>
@@ -462,15 +501,16 @@
                  <a class="btn ghost" href="report.html?id=${r.id}">Health report</a>`}
           </div>
         </div>`;
-    }).join('') + (notListed.length ? `<p class="xs muted uti-note">${notListed.map(r => `${HG.esc(first(r))} is high risk from low hydration, but ${r.sex === 'F' ? 'her' : 'his'} temperature is steady, so ${r.sex === 'F' ? 'she is' : 'he is'} not on UTI watch.`).join(' ')}</p>` : '');
+    }).join('') + notListed.map(r => `<p class="xs muted uti-note">Not listed: ${HG.esc(first(r))}. High risk from low hydration, temperature steady.</p>`).join('');
   }
-  // The urine-test action works the same from the Needs attention list and the UTI watch pop-up
+  // The urine-test action works the same from every Actions / Needs attention list and UTI watch.
+  // Focus goes back to the new button in the same row of the list that was clicked.
   function onUrine(e) {
     const b = e.target.closest('[data-urine], [data-cancel]');
     if (!b) return;
     const id = b.dataset.urine || b.dataset.cancel;
     const r = HG.resident(id);
-    const inPopup = !!b.closest('#uti-list');
+    const box = b.closest('[data-attn], .uti-list');
     if (b.dataset.urine) {
       urineTests[id] = { time: new Date().toISOString(), by: ME.name };
       HG.toast(`Urine test requested for ${first(r)}`);
@@ -481,49 +521,60 @@
     store.set(UTI_KEY, urineTests);
     renderUti();
     renderAttention();
-    const next = inPopup ? $(`.uti-row[data-id="${id}"] .uti-action button`) : $(`.attn-row[data-id="${id}"] .attn-act button, .attn-row[data-id="${id}"] .attn-act a`);
+    const row = box && box.querySelector(`[data-id="${id}"]`);
+    const next = row && row.querySelector('.uti-action button, .attn-act button, .attn-act a');
     next && next.focus();
   }
-  $('#uti-list').addEventListener('click', onUrine);
-  $('#attn-list').addEventListener('click', onUrine);
+  $('#main').addEventListener('click', onUrine);
 
   // =====================================================================
-  // Needs attention: open alerts and UTI watch, one line per resident
+  // Needs attention: open alerts and UTI watch, one line per resident.
+  // Drawn into every [data-attn] container: "all", or one wing's column.
   // =====================================================================
-  function renderAttention() {
+  function attentionItems() {
     const byId = {};
     ALERTS.filter(a => a.open).forEach(a => { (byId[a.r.id] = byId[a.r.id] || { r: a.r }).alert = byId[a.r.id].alert || a; });
     R.forEach(r => { const u = utiSignals(r); if (u.status) (byId[r.id] = byId[r.id] || { r }).uti = u.status; });
-    const items = Object.values(byId).sort((a, b) =>
+    return Object.values(byId).sort((a, b) =>
       HG.LEVELS[a.r.risk.level].rank - HG.LEVELS[b.r.risk.level].rank || (a.uti === 'strong' ? 0 : 1) - (b.uti === 'strong' ? 0 : 1));
-    $('#at-count').textContent = items.length ? plural(items.length, 'resident') : '';
-    if (!items.length) { $('#attn-list').innerHTML = '<p class="small muted">Nothing needs you right now.</p>'; return; }
-    $('#attn-list').innerHTML = items.map(({ r, alert, uti }) => {
-      const req = urineTests[r.id];
-      const why = [
-        alert && `Alert open since ${HG.fmtTime(alert.time)}`,
-        uti && (uti === 'strong' ? 'strong UTI signs' : 'possible UTI'),
-        req && `urine test requested ${HG.fmtTime(new Date(req.time))}`,
-      ].filter(Boolean).join(', ');
-      let act;
-      if (uti && !req) act = `<button type="button" class="btn" data-urine="${r.id}">Recommend urine test</button>`;
-      else if (uti) act = `<button type="button" class="btn ghost" data-cancel="${r.id}">Cancel test</button>`;
-      else act = `<a class="btn secondary" href="nurse.html?id=${r.id}">Go to ward</a>`;
-      return `
-        <div class="attn-row" data-id="${r.id}">
-          ${HG.avatar(r)}
-          <div class="attn-who"><span><a href="resident.html?id=${r.id}"><strong>${HG.esc(first(r))}</strong></a> <span class="xs faint">room ${r.room}</span></span>
-            <span class="xs muted">${why.charAt(0).toUpperCase() + why.slice(1)}.${alert && uti ? ` <a href="nurse.html?id=${r.id}">Go to ward</a>` : ''}</span></div>
-          <div class="attn-act">${act}</div>
-        </div>`;
-    }).join('');
+  }
+  function attnRow({ r, alert, uti }) {
+    const req = urineTests[r.id];
+    const why = [
+      alert && `Alert open since ${HG.fmtTime(alert.time)}`,
+      uti && (uti === 'strong' ? 'strong UTI signs' : 'possible UTI'),
+      req && `urine test requested ${HG.fmtTime(new Date(req.time))}`,
+    ].filter(Boolean).join(', ');
+    let act;
+    if (uti && !req) act = `<button type="button" class="btn" data-urine="${r.id}">Recommend urine test</button>`;
+    else if (uti) act = `<button type="button" class="btn ghost" data-cancel="${r.id}">Cancel test</button>`;
+    else act = `<a class="btn secondary" href="nurse.html?id=${r.id}">Go to ward</a>`;
+    return `
+      <div class="attn-row" data-id="${r.id}">
+        ${HG.avatar(r)}
+        <div class="attn-who"><span><a href="resident.html?id=${r.id}"><strong>${HG.esc(first(r))}</strong></a></span>
+          <span class="xs muted">${HG.esc(HG.where(r))}</span>
+          <span class="xs muted">${why.charAt(0).toUpperCase() + why.slice(1)}.${alert && uti ? ` <a href="nurse.html?id=${r.id}">Go to ward</a>` : ''}</span></div>
+        <div class="attn-act">${act}</div>
+      </div>`;
+  }
+  function renderAttention() {
+    const items = attentionItems();
+    const forKey = k => k === 'all' ? items : items.filter(x => x.r.wing === k);
+    HG.$$('[data-attn]').forEach(el => {
+      const list = forKey(el.dataset.attn);
+      el.innerHTML = list.length ? list.map(attnRow).join('') : '<p class="small muted">Nothing needs action</p>';
+    });
+    HG.$$('[data-attn-head]').forEach(h => { h.textContent = `${h.dataset.label} (${forKey(h.dataset.attnHead).length})`; });
   }
 
   // =====================================================================
   // 5. Staffing
   // =====================================================================
   function renderStaff() {
-    $('#staff-list').innerHTML = Object.values(HG.STAFF).map(s => {
+    const all = Object.values(HG.STAFF);
+    $('#staff-sum').textContent = `On shift (${all.length})`;
+    $('#staff-list').innerHTML = all.map(s => {
       const n = R.filter(r => r.nurse === s.id).length;
       const isMe = s.id === ME.id;
       const load = n ? plural(n, 'resident') : (s.short === 'AIN' ? `Supports ${s.wing}` : 'Whole home');
@@ -531,7 +582,7 @@
         <div class="staff-row">
           ${HG.avatar(s)}
           <div class="staff-who"><strong>${HG.esc(s.name)}</strong> ${isMe ? '<span class="chip me plain">You</span>' : ''}
-            <span class="xs muted">${HG.esc(s.role)} (${s.short}), ${HG.esc(s.wing === 'All wings' ? 'all wings' : s.wing + ' wing')}</span></div>
+            <span class="xs muted">${HG.esc(s.role)} (${s.short}), ${HG.esc(s.wing === 'All wings' ? 'all wings' : s.wing)}</span></div>
           <span class="staff-load small">${load}</span>
           ${isMe ? '<span class="staff-btn"></span>' : `<button type="button" class="btn secondary staff-btn" data-msg="${s.id}">Message</button>`}
         </div>`;
@@ -540,17 +591,32 @@
   function renderStaffStrip() {
     const all = Object.values(HG.STAFF);
     $('#staff-strip').innerHTML = `
-      <span class="strip-avs">${all.map(s => HG.avatar(s)).join('')}</span>
+      <span class="strip-avs" aria-hidden="true">${all.map(s => HG.avatar(s)).join('')}</span>
       <span class="strip-text"><strong>${plural(all.length, 'person', 'people')}</strong>
-        <span class="xs muted">${all.map(s => HG.esc(s.name.split(' ')[0])).join(', ')}</span></span>
-      <span class="strip-more small">Show all</span>`;
-    $('#staff-strip').setAttribute('aria-label', `${plural(all.length, 'person', 'people')} on shift. Show the full list`);
+        <span class="small muted">${all.map(s => HG.esc(`${s.name.split(' ')[0]} ${s.short}`)).join(', ')}</span></span>`;
   }
-  $('#staff-strip').addEventListener('click', () => POP.staff.open());
   $('#staff-list').addEventListener('click', e => {
     const b = e.target.closest('[data-msg]');
     if (b) HG.toast(`Message sent to ${HG.staff(b.dataset.msg).name.split(' ')[0]}`);
   });
+
+  // =====================================================================
+  // All residents (risk order), in a closed disclosure
+  // =====================================================================
+  function renderAllResidents() {
+    $('#all-sum').textContent = `All residents (${R.length})`;
+    $('#all-table').innerHTML = `
+      <thead><tr><th scope="col">Resident</th><th scope="col">Room</th><th scope="col">Risk</th>
+        <th scope="col">Temp</th><th scope="col">HR</th><th scope="col">Hyd</th><th scope="col">Now in</th></tr></thead>
+      <tbody>${[...R].sort(byRisk).map(r => { const rd = r.readings[11]; return `
+        <tr>
+          <td><a href="resident.html?id=${r.id}"><strong>${HG.esc(r.name)}</strong></a></td>
+          <td>${HG.esc(HG.where(r))}</td>
+          <td>${HG.riskChip(r.risk.level)} <span class="xs muted">${r.risk.total} of 9</span></td>
+          <td>${rd.temp.toFixed(1)} °C</td><td>${rd.hr} bpm</td><td>${rd.hyd}%</td>
+          <td>${HG.esc(HG.ZONES[live[r.id].loc].label)}</td>
+        </tr>`; }).join('')}</tbody>`;
+  }
 
   // =====================================================================
   // 6. Reports (CSV built from the data)
@@ -571,7 +637,7 @@
     {
       id: 'daily', title: 'Daily ward summary', text: 'Every resident’s latest reading, risk and location.',
       rows: () => [['Resident', 'Preferred name', 'Room', 'Wing', 'Nurse', 'Risk', 'Score (of 9)', 'Temperature (°C)', 'Heart rate (bpm)', 'Hydration (%)', 'Reading time', 'Fluids today (mL)', 'Fluid target (mL)', 'Location', 'Resuscitation']]
-        .concat(R.map(r => { const rd = r.readings[11]; return [r.name, r.preferred, r.room, r.wing, HG.staff(r.nurse).name, HG.LEVELS[r.risk.level].label, r.risk.total, rd.temp.toFixed(1), rd.hr, rd.hyd, `${fmtDMY(rd.time)} ${HG.fmtTime(rd.time)}`, r.fluids[6], r.fluidTarget, HG.ZONES[live[r.id].loc].label, r.resus.status]; })),
+        .concat(R.map(r => { const rd = r.readings[11]; return [r.name, r.preferred, r.room, r.wing, HG.staff(r.nurse).name, HG.LEVELS[r.risk.level].label, r.risk.total, rd.temp.toFixed(1), rd.hr, rd.hyd, `${HG.fmtDMY(rd.time)} ${HG.fmtTime(rd.time)}`, r.fluids[6], r.fluidTarget, HG.ZONES[live[r.id].loc].label, r.resus.status]; })),
     },
     {
       id: 'fluids', title: 'Hydration and fluids (7 days)', text: 'Daily fluid intake against target, with average hydration index.',
@@ -579,7 +645,7 @@
         const out = [['Date', 'Resident', 'Room', 'Wing', 'Fluids (mL)', 'Target (mL)', 'Of target (%)', 'Average hydration index (%)']];
         R.forEach(r => r.fluids.forEach((ml, i) => {
           const day = new Date(LT.getTime() - (6 - i) * 86400e3);
-          out.push([fmtDMY(day), r.name, r.room, r.wing, ml, r.fluidTarget, Math.round(ml / r.fluidTarget * 100), r.history[23 + i].hyd]);
+          out.push([HG.fmtDMY(day), r.name, r.room, r.wing, ml, r.fluidTarget, Math.round(ml / r.fluidTarget * 100), r.history[23 + i].hyd]);
         }));
         return out;
       },
@@ -587,12 +653,12 @@
     {
       id: 'alerts', title: 'Alerts and response times', text: 'Alerts in the last 12 hours, who acknowledged them and how fast.',
       rows: () => [['Date', 'Time', 'Resident', 'Room', 'Wing', 'Level', 'Reason', 'Acknowledged by', 'Minutes to acknowledge']]
-        .concat(ALERTS.map(a => [fmtDMY(a.time), HG.fmtTime(a.time), a.r.name, a.r.room, a.r.wing, HG.LEVELS[a.level].label, a.reason, a.open ? 'Not yet' : a.by, a.open ? '' : a.mins])),
+        .concat(ALERTS.map(a => [HG.fmtDMY(a.time), HG.fmtTime(a.time), a.r.name, a.r.room, a.r.wing, HG.LEVELS[a.level].label, a.reason, a.open ? 'Not yet' : a.by, a.open ? '' : a.mins])),
     },
     {
       id: 'doors', title: 'Door access log', text: 'Wristband door unlocks and refused attempts.',
       rows: () => [['Date', 'Time', 'Resident', 'Room', 'Event', 'Result']]
-        .concat([...doorFeed].sort((a, b) => b.time - a.time).map(d => [fmtDMY(d.time), HG.fmtTime(d.time), d.r.name, d.r.room, d.text, d.ok ? 'Unlocked' : 'Refused'])),
+        .concat([...doorFeed].sort((a, b) => b.time - a.time).map(d => [HG.fmtDMY(d.time), HG.fmtTime(d.time), d.r.name, d.r.room, d.text, d.ok ? 'Unlocked' : 'Refused'])),
     },
   ];
   function renderReports() {
@@ -605,7 +671,7 @@
         <div><strong>Individual resident report</strong><span class="xs muted">Printable health report for one resident.</span></div>
         <div class="row report-pick">
           <label class="visually-hidden" for="report-res">Resident</label>
-          <select class="input" id="report-res">${R.map(r => `<option value="${r.id}">${HG.esc(r.name)} (room ${r.room})</option>`).join('')}</select>
+          <select class="input" id="report-res">${R.map(r => `<option value="${r.id}">${HG.esc(`${r.name}, ${HG.where(r)}`)}</option>`).join('')}</select>
           <a class="btn secondary" id="report-open" href="report.html?id=${R[0].id}">Open report</a>
         </div>
       </div>`;
@@ -626,14 +692,14 @@
 
   function renderPrintSummary() {
     const c = counts(R);
-    const sorted = [...R].sort((a, b) => HG.LEVELS[a.risk.level].rank - HG.LEVELS[b.risk.level].rank || b.risk.total - a.risk.total);
+    const sorted = [...R].sort(byRisk);
     $('#print-summary').innerHTML = `
       <h1>Daily ward summary</h1>
-      <p class="small">${HG.FACILITY.full}. Readings at ${HG.fmtTime(LT)} on ${fmtDMY(LT)}. Printed by ${ME.name}, ${ME.short}.</p>
+      <p class="small">${HG.FACILITY.full}. Readings at ${HG.fmtTime(LT)} on ${HG.fmtDMY(LT)}. Printed by ${ME.name}, ${ME.short}.</p>
       <p class="small">${R.length} residents: ${c.high} high risk, ${c.watch} watch, ${c.low} low risk. ${ALERTS.length} alerts in the last 12 hours, median ${Math.round(median(ALERTS.filter(a => !a.open).map(a => a.mins)))} min to acknowledge.</p>
       <table class="table">
         <thead><tr><th>Resident</th><th>Room</th><th>Risk</th><th>Temp</th><th>HR</th><th>Hyd</th><th>Fluids today</th><th>Location</th></tr></thead>
-        <tbody>${sorted.map(r => { const rd = r.readings[11]; return `<tr><td>${HG.esc(r.name)}</td><td>${r.room} ${r.wing}</td><td>${HG.LEVELS[r.risk.level].label} (${r.risk.total})</td><td>${rd.temp.toFixed(1)} °C</td><td>${rd.hr}</td><td>${rd.hyd}%</td><td>${r.fluids[6]} of ${r.fluidTarget} mL</td><td>${HG.ZONES[live[r.id].loc].label}</td></tr>`; }).join('')}</tbody>
+        <tbody>${sorted.map(r => { const rd = r.readings[11]; return `<tr><td>${HG.esc(r.name)}</td><td>${HG.esc(HG.where(r))}</td><td>${HG.LEVELS[r.risk.level].label} (${r.risk.total})</td><td>${rd.temp.toFixed(1)} °C</td><td>${rd.hr}</td><td>${rd.hyd}%</td><td>${r.fluids[6]} of ${r.fluidTarget} mL</td><td>${HG.ZONES[live[r.id].loc].label}</td></tr>`; }).join('')}</tbody>
       </table>
       <h2>UTI watch</h2>
       <ul class="small">${R.filter(r => utiSignals(r).status).map(r => `<li>${HG.esc(r.name)}: ${utiSignals(r).status === 'strong' ? 'strong signs' : 'possible signs'}${urineTests[r.id] ? ', urine test requested' : ''}.</li>`).join('')}</ul>
@@ -641,28 +707,52 @@
   }
 
   // =====================================================================
+  // View switching: one floor plan, moved between the manager and locations slots
+  // =====================================================================
+  function setView(moveFocus) {
+    const onMap = isMap();
+    $('#mv').hidden = onMap;
+    $('#lv').hidden = !onMap;
+    document.body.classList.toggle('is-locations', onMap);
+    document.title = `${onMap ? 'Locations' : 'Manager dashboard'} – HydroGuard`;
+    const plan = $('#plan');
+    const slot = onMap ? $('#map-slot') : $('#mini-slot');
+    if (plan.parentNode !== slot) { closePop(); slot.prepend(plan); }
+    plan.classList.toggle('is-mini', !onMap);
+    drawPlan();
+    layoutDots();
+    syncTabs();
+    if (moveFocus) { window.scrollTo(0, 0); $(onMap ? '#map-h' : '#mv-h').focus({ preventScroll: true }); }
+  }
+  window.addEventListener('hashchange', () => setView(true));
+  window.addEventListener('popstate', () => setView(true));
+  // The header tabs and "Open locations" point at this page: switch views in place instead of reloading
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[href="manager.html"], a[href="manager.html#map"]');
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    const url = a.getAttribute('href');
+    if (location.pathname.split('/').pop() + location.search + location.hash !== url) history.pushState(null, '', url);
+    setView(true);
+  });
+
+  // =====================================================================
   // Boot
   // =====================================================================
   renderOverview();
-  drawPlan();
+  renderWings();
   syncMotion();
-  layoutDots();
+  setView(false);
   renderLocList();
   renderDoorFeed();
   renderAlerts();
-  renderAlertChart();
   renderUti();
   renderAttention();
   renderStaff();
   renderStaffStrip();
+  renderAllResidents();
   renderReports();
-  const utiN = R.filter(r => utiSignals(r).status).length;
-  $('#ov-more').append(
-    HG.moreBtn({ label: 'Alert history', icon: 'bell', count: ALERTS.length, popup: openAlerts }),
-    HG.moreBtn({ label: 'UTI watch', icon: 'thermo', count: utiN, popup: POP.uti }),
-    HG.moreBtn({ label: 'Door access', icon: 'key', popup: POP.doors }),
-    HG.moreBtn({ label: 'Reports', icon: 'doc', popup: POP.reports }),
-  );
+  $('#mv-tools').append(HG.moreBtn({ label: 'Reports', icon: 'doc', popup: POP.reports }));
   HG.demoNote('Locations move on their own every few seconds to show what live tracking looks like.');
 
   let rsTimer;
@@ -673,19 +763,16 @@
       if (w === lastW) return;
       lastW = w;
       clearTimeout(rsTimer);
-      rsTimer = setTimeout(() => { drawPlan(); layoutDots(); renderAlertChart(); }, 60);
+      rsTimer = setTimeout(() => { drawPlan(); layoutDots(); if ($('#al-disclose').open) renderAlertChart(); }, 60);
     }).observe($('#main'));
   }
 
-  const focusId = HG.param('id');
-  if (location.hash === '#map' || (focusId && HG.resident(focusId))) {
+  if (focusId && isMap()) {
     requestAnimationFrame(() => {
       $('#map').scrollIntoView({ block: 'start' });
-      if (focusId && HG.resident(focusId)) {
-        const dot = $(`.m-dot[data-id="${focusId}"]`);
-        if (dot) dot.classList.add('is-focus');
-        openPop(focusId);
-      }
+      const dot = $(`.m-dot[data-id="${focusId}"]`);
+      if (dot) dot.classList.add('is-focus');
+      openPop(focusId);
     });
   }
 })(window.HG = window.HG || {});
